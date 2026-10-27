@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accounting & Stock Manager</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f3f5f9;color:#1d2433;display:flex;min-height:100vh}
+nav{width:230px;background:#0f1a3a;color:#fff;padding:14px 10px;flex-shrink:0}
+nav h2{font-size:16px;margin:0 8px 14px;color:#9fb4ff}
+.gh{display:flex;align-items:center;gap:10px;padding:11px 12px;font-size:16px;font-weight:600;cursor:pointer;border-radius:8px;color:#e6ebff}
+.gh:hover{background:#1a2850}
+.gh .ar{margin-left:auto;transition:transform .2s;font-size:13px}
+.grp.shut .ar{transform:rotate(180deg)}
+.grp.shut .gb{display:none}
+.gb{margin:2px 0 8px 22px;border-left:1px solid #34436e;padding-left:6px}
+.gb a{display:flex;align-items:center;gap:10px;padding:10px 12px;color:#cfd6e6;cursor:pointer;font-size:13px;font-weight:600;border-radius:6px}
+.gb a:hover{background:#1a2850}
+.gb a.on{background:#3d5afe;color:#fff}
+.sub{margin-left:14px;border-left:1px solid #34436e;padding-left:4px}
+.sub.shut{display:none}
+.gb a .ar2{margin-left:auto;font-size:12px}
+.ctl{display:flex;gap:10px;padding:12px;flex-wrap:wrap;align-items:end}
+.ctl div{min-width:150px}
+.ctl label{margin:0 0 3px}
+.top{display:flex;align-items:center;gap:22px;background:#fff;border-radius:12px;padding:12px 18px;margin-bottom:18px;box-shadow:0 1px 4px #0001;flex-wrap:wrap}
+.tc{display:flex;align-items:center;gap:10px}
+.tc .ic{background:#eef1ff;border-radius:10px;padding:9px;font-size:18px}
+.tc small{display:block;font-size:10px;color:#6b7690;letter-spacing:.5px}
+.top select{border:0;font-weight:700;font-size:15px;padding:0;width:auto;background:transparent;cursor:pointer}
+.badge{background:#e3f7ec;color:#14803c;font-size:12px;font-weight:600;padding:6px 12px;border-radius:20px;margin-left:auto}
+.av{background:#111a33;color:#fff;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+nav .top1{display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;border-radius:10px;color:#e6ebff;font-weight:600;font-size:16px;cursor:pointer}
+nav .top1:hover{background:#1a2850}
+nav .top1.on{background:#3d5afe;color:#fff}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:16px}
+.kp{background:#fff;border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;box-shadow:0 1px 4px #0001}
+.kp .ki{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
+.kp small{display:block;font-size:12px;color:#6b7690}
+.kp b{font-size:20px;display:block;margin:2px 0}
+.kp i{font-style:normal;font-size:11px;color:#6b7690}
+.dash2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media(max-width:900px){.dash2{grid-template-columns:1fr}}
+.pan{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 4px #0001}
+.pan>small{display:block;font-size:11px;color:#6b7690;margin:2px 0 8px}
+.chart{display:flex;align-items:flex-end;gap:12px;height:230px;border-bottom:1px solid #e6e9f2;padding-top:10px}
+.bc{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;font-size:11px;color:#8a94a8}
+.bar2{width:70%;max-width:34px;background:linear-gradient(#5b7cff,#3d5afe);border-radius:6px 6px 0 0;margin-bottom:4px}
+.bar2.z{background:#e3e7f0}
+.fys{text-align:right;font-size:12px;color:#6b7690;margin-top:10px}
+.fys b{color:#1d2433;font-size:14px}
+.qa{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.qt{display:flex;align-items:center;gap:8px;border:1px solid #e1e5f0;border-radius:10px;padding:16px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.qt:hover{border-color:#3d5afe;background:#f5f7ff}
+.qt b{margin-left:auto;color:#3d5afe;font-size:18px}
+main{flex:1;padding:20px;overflow:auto;min-width:0}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.bar h1{margin:0;font-size:22px;flex:1}
+input,select,textarea{padding:8px 10px;border:1px solid #c5cbd8;border-radius:6px;font-size:14px;width:100%;font-family:inherit}
+.bar input{width:200px}
+button{padding:8px 14px;border:0;border-radius:6px;cursor:pointer;font-size:14px;background:#3d5afe;color:#fff}
+button.e{background:#f0a500;padding:5px 10px}
+button.d{background:#e53935;padding:5px 10px}
+button.g{background:#8a94a8}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 4px #0002;overflow:auto;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:#e8ecf7;text-align:left;padding:9px 10px;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid #eceff5}
+.empty{padding:24px;text-align:center;color:#8a94a8}
+dialog{border:0;border-radius:10px;padding:20px;width:min(460px,94vw);box-shadow:0 8px 30px #0005}
+dialog::backdrop{background:#0006}
+label{display:block;font-size:13px;margin:10px 0 3px;color:#475069}
+.btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.tot{padding:10px;text-align:right;font-weight:600}
+.neg{color:#e53935}
+h3{margin:4px 0 8px}
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+  <div class="top" id="top"></div>
+  <div class="bar"><h1 id="ttl"></h1><input id="q" placeholder="Search..."><button id="add">+ Naya Banao</button></div>
+  <div id="extra"></div>
+  <div class="card" id="list"></div>
+</main>
+<dialog id="dlg"><h3 id="dt"></h3><div id="frm"></div><div class="btns"><button class="g" id="cx">Cancel</button><button id="sv">Save</button></div></dialog>
+
+<script>
+const UNITS=["Pcs","Kg","Gm","Ltr","Box","Mtr","Dozen"];
+const today=()=>new Date().toISOString().slice(0,10);
+const tx=(t)=>({title:t,tx:1,f:[
+ {k:"date",l:"Date",t:"date",r:1},{k:"inv",l:"Invoice / Bill No"},{k:"party",l:"Party",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},
+ {k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"remark",l:"Remark"}]});
+const M={
+ company:{title:"Company Master",f:[{k:"name",l:"Company Name",r:1},{k:"gstin",l:"GSTIN"},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"address",l:"Address",t:"textarea"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"}]},
+ party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
+ item:{title:"Item Master",f:[{k:"name",l:"Item Name",r:1},{k:"code",l:"Item Code"},{k:"unit",l:"Unit",opts:UNITS},{k:"srate",l:"Sale Rate",t:"number"},{k:"prate",l:"Purchase Rate",t:"number"},{k:"openq",l:"Opening Stock Qty",t:"number"},{k:"minq",l:"Low Stock Limit (Qty, blank = 10)",t:"number"},{k:"roq",l:"Reorder Qty (Auto PO)",t:"number"},{k:"supp",l:"Default Supplier (Auto PO)",src:"party"},{k:"hsn",l:"HSN Code"},{k:"gst",l:"GST %",t:"number"}]},
+ stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
+ sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Sale Return"), purchasereturn:tx("Purchase Return"),
+ po:{title:"Purchase Order",tx:1,f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Supplier",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"status",l:"Status",opts:["Pending","Received","Cancelled"]},{k:"remark",l:"Remark"}]},
+ receipt:{title:"Receipt Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Party",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"mode",l:"Mode",opts:["Cash","Bank","UPI","Cheque"]},{k:"remark",l:"Remark"}]},
+ payment:{title:"Payment Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Party",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"mode",l:"Mode",opts:["Cash","Bank","UPI","Cheque"]},{k:"remark",l:"Remark"}]},
+ journal:{title:"Journal Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"dr",l:"Debit Account (Party)",src:"party",r:1},{k:"cr",l:"Credit Account (Party)",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"remark",l:"Narration"}]}
+};
+const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","stockstatus"]],["Other","🗃️",["backup"]]];
+const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
+const PT={accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
+const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾"};
+const OPEN={Master:true,Company:true,Transactions:true,Utility:true,Display:true,Other:true};
+const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
+
+let DB={};
+try{DB=JSON.parse(localStorage.getItem("acc_db")||"{}")}catch(e){DB={}}
+Object.keys(M).forEach(k=>DB[k]=DB[k]||[]);
+const save=()=>{try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const lookup=(src,id)=>{if(!id)return "";const r=DB[src].find(x=>x.id===id);return r?r.name:"(deleted)"};
+const val=(f,v)=>f.src?lookup(f.src,v):(v??"");
+
+
+/* ===== Display / Reports ===== */
+const n2=v=>(+v||0).toFixed(2);
+const dc=v=>n2(Math.abs(v))+(v>=0?" Dr":" Cr");
+const _d=new Date(),FY0=_d.getMonth()>=3?_d.getFullYear():_d.getFullYear()-1;
+const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:""};
+const fyl=y=>y+"-"+String(y+1).slice(2);
+const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
+function go(k){cur=k;render();openForm()}
+function renderTop(){
+ const cs=DB.company,c=cs.find(x=>x.id===RS.company)||cs[0];
+ let fy="";for(let y=FY0-3;y<=FY0+1;y++)fy+=`<option value="${y}" ${y===RS.fy?"selected":""}>${fyl(y)}</option>`;
+ $("top").innerHTML=`<div class="tc"><span class="ic">🏢</span><div><small>CURRENT COMPANY</small><select onchange="RS.company=this.value;render()">${cs.length?cs.map(x=>`<option value="${x.id}" ${c&&x.id===c.id?"selected":""}>${esc(x.name)}</option>`).join(""):"<option>Company banao</option>"}</select></div></div><div class="tc"><span class="ic">📅</span><div><small>FINANCIAL YEAR</small><select onchange="RS.fy=+this.value;render()">${fy}</select></div></div><span class="badge">✔ Saved in Browser</span><span class="av">${esc((c?c.name:"A").slice(0,2).toUpperCase())}</span>`;
+}
+const sum=k=>DB[k].reduce((a,x)=>a+(+x.amount||0),0);
+const stockQty=i=>{let q=+i.openq||0;const s=k=>DB[k].filter(x=>x.item===i.id).reduce((a,x)=>a+(+x.qty||0),0);
+ q+=s("purchase")+s("salereturn")-s("sale")-s("purchasereturn");
+ DB.stock.filter(x=>x.item===i.id).forEach(x=>q+=(x.type==="In"?1:-1)*(+x.qty||0));return q};
+const LED={sale:"dr",salereturn:"cr",purchase:"cr",purchasereturn:"dr",payment:"dr",receipt:"cr"};
+function entries(pid){const e=[];
+ for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?+x.amount||0:0,cr:LED[k]==="cr"?+x.amount||0:0}));
+ DB.journal.forEach(x=>{if(x.dr===pid)e.push({date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
+ return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
+const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
+const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">Koi data nahi</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
+const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="RS.${k}=this.value;render()"></div>`;
+const isBank=x=>(x.mode||"Cash")!=="Cash";
+
+function book(title,pick){
+ const l=[];
+ DB.receipt.filter(pick).forEach(x=>l.push({d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
+ DB.payment.filter(pick).forEach(x=>l.push({d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
+ l.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+ let b=0,ti=0,to=0;
+ const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b)]});
+ return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
+}
+function outst(recv){
+ const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>recv?b>0:b<0);
+ const t=l.reduce((a,[p,b])=>a+Math.abs(b),0);
+ return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+}
+const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
+const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
+
+const R={
+ dashboard:{t:"Dashboard",f(){
+  const from=RS.fy+"-04-01",to=(RS.fy+1)+"-03-31",inF=x=>x.date>=from&&x.date<=to;
+  const fy=k=>DB[k].filter(inF).reduce((a,x)=>a+(+x.amount||0),0);
+  const bl=DB.party.map(bal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0);
+  const L=fyl(RS.fy),mv=Array(12).fill(0),nm=["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
+  DB.sale.filter(inF).forEach(x=>mv[(parseInt(x.date.slice(5,7))+8)%12]+=+x.amount||0);
+  const mx=Math.max(...mv,1);
+  const K=[["Total Sales",fy("sale"),"FY "+L,"₹","#e8edff","#3d5afe"],["Total Purchase",fy("purchase"),"FY "+L,"₹","#fff0d9","#e08a00"],["Total Receipt",fy("receipt"),"FY "+L,"₹","#efe9ff","#6a4cd9"],["Amount Receivable",rc,"Closing Dr","₹","#e1f6ea","#14803c"],["Payable",pb,"Closing Cr","₹","#ffe6e6","#e53935"]];
+  const Q=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","party","item"];
+  return `<div class="kpis">${K.map(k=>`<div class="kp"><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
+  <div class="dash2"><div class="pan"><b>Sales Overview</b><small>FY ${L} • Monthly sale value</small><div class="chart">${mv.map((v,i)=>`<div class="bc"><div class="bar2 ${v?"":"z"}" style="height:${v?Math.max(6,v/mx*88):3}%" title="${nm[i]}: ${inr(v)}"></div>${nm[i]}</div>`).join("")}</div><div class="fys">FY Sales: <b>${inr(fy("sale"))}</b></div></div>
+  <div class="pan"><b>Quick Actions</b><small>Transactions, masters aur reports</small><div class="qa">${Q.map(k=>`<div class="qt" onclick="go('${k}')"><span>${ICON[k]}</span>${T(k)}<b>+</b></div>`).join("")}</div></div></div>`}},
+ daybook:{t:"Day Book",f(){
+  const r=[];
+  ["sale","purchase","salereturn","purchasereturn"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(lookup("item",x.item))+" × "+x.qty,n2(x.amount)])));
+  ["receipt","payment"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount)])));
+  DB.journal.filter(x=>x.date===RS.date).forEach(x=>r.push(["Journal Voucher",esc(lookup("party",x.dr))+" → "+esc(lookup("party",x.cr)),esc(x.remark||""),n2(x.amount)]));
+  return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Party","Details","Amount"],r,r.length+" entries")}},
+ cashbook:{t:"Cash Book",f:()=>book("Cash",x=>!isBank(x))},
+ bankbook:{t:"Bank Book",f:()=>book("Bank",isBank)},
+ journalbook:{t:"Journal Book",f:()=>tbl(["Date","Debit A/c","Credit A/c","Amount","Narration"],DB.journal.slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(lookup("party",x.dr)),esc(lookup("party",x.cr)),n2(x.amount),esc(x.remark||"")]))},
+ recv:{t:"Outstanding – Receivable",f:()=>outst(1)},
+ pay:{t:"Outstanding – Payable",f:()=>outst(0)},
+ trading:{t:"Trading Account",f(){
+  const op=DB.item.reduce((a,i)=>a+(+i.openq||0)*(+i.prate||0),0),cl=stockVal();
+  const ns=sum("sale")-sum("salereturn"),np=sum("purchase")-sum("purchasereturn"),gp=ns+cl-op-np;
+  return tbl(["Particulars","Amount (₹)"],[["Opening Stock",n2(op)],["Purchases",n2(sum("purchase"))],["Less: Purchase Return",n2(sum("purchasereturn"))],["Net Purchases",n2(np)],["Sales",n2(sum("sale"))],["Less: Sale Return",n2(sum("salereturn"))],["Net Sales",n2(ns)],["Closing Stock (at purchase rate)",n2(cl)],[`<b>${gp>=0?"Gross Profit":"Gross Loss"}</b>`,`<b class="${gp<0?"neg":""}">${n2(Math.abs(gp))}</b>`]])}},
+ finpos:{t:"Financial Position",f(){
+  const bl=DB.party.map(bal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0),[c,b]=cashBank(),sv=stockVal();
+  return tbl(["Particulars","Amount (₹)"],[["Receivable (Debtors)",n2(rc)],["Payable (Creditors)",n2(pb)],["Cash in Hand",n2(c)],["Bank / UPI / Cheque",n2(b)],["Stock Value",n2(sv)],["<b>Net (Receivable + Cash + Bank + Stock − Payable)</b>",`<b>${n2(rc+c+b+sv-pb)}</b>`]])}},
+ ledger:{t:"Party Ledger",f(){
+  const ctl=`<div class="ctl"><div><label>Party</label><select onchange="RS.party=this.value;render()"><option value="">-- Select --</option>${DB.party.map(p=>`<option value="${p.id}" ${p.id===RS.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
+  const p=DB.party.find(x=>x.id===RS.party);if(!p)return ctl+'<div class="empty">Party select karo</div>';
+  let b=+p.opening||0;const e=entries(p.id),rows=[];
+  e.filter(x=>RS.from&&x.date<RS.from).forEach(x=>b+=x.dr-x.cr);
+  rows.push(["","<i>Opening Balance</i>","","","",dc(b)]);
+  let td=0,tc=0;
+  e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.remark),n2(x.dr),n2(x.cr),dc(b)])});
+  return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
+ stockstatus:{t:"Stock Status",f(){
+  const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
+  const all=DB.item.map(i=>{const q=stockQty(i);return {i,q,s:q<=0?"out":q<=lim(i)?"low":"ok"}});
+  const lab={ok:'<b style="color:#14803c">In Stock</b>',low:'<b style="color:#e08a00">Low Stock</b>',out:'<b style="color:#e53935">Out of Stock</b>'};
+  const cnt={all:all.length,in:all.filter(x=>x.s!=="out").length,low:all.filter(x=>x.s==="low").length,out:all.filter(x=>x.s==="out").length};
+  const f=RS.sf||"all",q=(RS.sq||"").toLowerCase();
+  const l=all.filter(x=>(f==="all"||(f==="in"?x.s!=="out":x.s===f))&&(!q||(x.i.name+" "+(x.i.code||"")).toLowerCase().includes(q)));
+  let tv=0;
+  const r=l.map(({i,q,s})=>{const v=q*(+i.prate||0);tv+=v;return [esc(i.name),esc(i.code||""),esc(i.unit||""),`<span class="${q<0?"neg":""}">${q}</span>`,n2(i.prate),n2(v),lab[s]]});
+  const opt=[["all","All Items"],["in","In Stock"],["low","Low Stock"],["out","Out of Stock"]].map(([v,t])=>`<option value="${v}" ${f===v?"selected":""}>${t} (${cnt[v]})</option>`).join("");
+  const ctl=`<div class="ctl"><div><label>Search Item</label><input id="sq" placeholder="Item name / code" value="${esc(RS.sq||"")}" oninput="RS.sq=this.value;render();const e=document.getElementById('sq');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div><div><label>Filter</label><select onchange="RS.sf=this.value;render()">${opt}</select></div></div>`;
+  return ctl+tbl(["Item","Code","Unit","Stock Qty","Purchase Rate","Stock Value","Status"],r,`Showing ${l.length} items &nbsp; Total Stock Value: ₹ ${n2(tv)}`)}}
+};
+
+const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
+Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx;
+ R[rk]={t:M[mk].title.replace(" Entry","").replace(" Voucher","")+" Register",f(){
+  const l=DB[mk].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const ctl=`<div class="ctl">${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
+  const tot=l.reduce((a,x)=>a+(+x.amount||0),0);
+  const rows=l.map((x,i)=>isT?[i+1,x.date,esc(lookup("party",x.party)),esc(lookup("item",x.item)),x.qty,n2(x.rate),n2(x.amount),esc(x.remark||"")]:[i+1,x.date,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),esc(x.remark||"")]);
+  const h=isT?["#","Date","Party","Item","Qty","Rate","Amount","Remark"]:["#","Date","Party","Mode","Amount","Remark"];
+  return ctl+tbl(h,rows,`Entries: ${l.length} &nbsp; Total: ₹ ${n2(tot)}`)}}});
+
+/* ===== Auto PO ===== */
+function apoRows(){
+ const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
+ return DB.item.map(i=>{const st=stockQty(i),pend=DB.po.filter(x=>x.item===i.id&&x.status==="Pending").reduce((a,x)=>a+(+x.qty||0),0),av=st+pend,lm=lim(i);
+  return {i,st,pend,av,lm,sug:+i.roq>0?+i.roq:Math.max(1,2*lm-av)}}).filter(r=>r.av<=r.lm);
+}
+function apoSet(id,k,v){const A=RS.apo=RS.apo||{};(A[id]=A[id]||{})[k]=v}
+function genPO(){
+ const A=RS.apo=RS.apo||{};let n=0;const miss=[];
+ apoRows().forEach(r=>{const a=A[r.i.id]||{},on=a.on??true,qty=+(a.qty??r.sug),party=a.party??r.i.supp??"";
+  if(!on||!(qty>0))return;
+  if(!party){miss.push(r.i.name);return}
+  DB.po.push({id:uid(),date:today(),party,item:r.i.id,qty:String(qty),rate:String(r.i.prate||0),status:"Pending",remark:"Auto PO",amount:n2(qty*(+r.i.prate||0))});
+  delete A[r.i.id];n++});
+ save();
+ let msg=n+" Purchase Order ban gaye.";
+ if(miss.length)msg+="\nSupplier select karo: "+miss.join(", ");
+ alert(msg);
+ if(n){cur="po"}
+ render();
+}
+R.autopo={t:"Auto PO Generate",f(){
+ const A=RS.apo=RS.apo||{},rows=apoRows();
+ const sup=DB.party.filter(p=>p.type!=="Customer");
+ const body=rows.map(r=>{const a=A[r.i.id]||{},id=r.i.id,pv=a.party??r.i.supp??"";
+  return `<tr><td><input type="checkbox" style="width:auto" ${(a.on??true)?"checked":""} onchange="apoSet('${id}','on',this.checked)"></td><td>${esc(r.i.name)}</td><td class="${r.st<=0?"neg":""}">${r.st}</td><td>${r.pend}</td><td>${r.lm}</td><td><input type="number" style="width:90px" value="${a.qty??r.sug}" onchange="apoSet('${id}','qty',this.value)"></td><td><select onchange="apoSet('${id}','party',this.value)"><option value="">-- Supplier --</option>${sup.map(p=>`<option value="${p.id}" ${p.id===pv?"selected":""}>${esc(p.name)}</option>`).join("")}</select></td></tr>`}).join("");
+ return `<div class="ctl"><div style="flex:1;min-width:260px;font-size:13px;color:#475069">Jin items ka stock (+ pending PO) Low Stock Limit se kam ya barabar hai, wo yahan dikhte hain. Qty aur Supplier badal sakte ho, phir Generate dabao.</div><button onclick="genPO()">⚙️ Generate PO (${rows.length} items)</button></div>`+
+ (rows.length?`<table><tr><th></th><th>Item</th><th>Stock</th><th>Pending PO</th><th>Low Limit</th><th>Order Qty</th><th>Supplier</th></tr>${body}</table>`:'<div class="empty">Abhi koi item reorder level par nahi hai 👍</div>')}};
+
+/* ===== Utility ===== */
+const UQC={Pcs:"PCS",Kg:"KGS",Gm:"GMS",Ltr:"LTR",Box:"BOX",Mtr:"MTR",Dozen:"DOZ"};
+const fd=d=>String(d||"").split("-").reverse().join("/");
+const comp=()=>DB.company.find(x=>x.id===RS.company)||DB.company[0]||{};
+const stc=x=>String(x.stcode||(x.gstin||"").slice(0,2)||"").trim();
+const docNo=(k,x)=>x.inv||(k==="sale"?"S":"SR")+String(DB[k].indexOf(x)+1).padStart(4,"0");
+const r2=v=>Math.round((+v||0)*100)/100;
+function dl(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+function cpTxt(t){try{navigator.clipboard.writeText(t).then(()=>alert("Copy ho gaya"),()=>prompt("Copy karo:",t))}catch(e){prompt("Copy karo:",t)}}
+function gstCalc(x){
+ const it=DB.item.find(i=>i.id===x.item)||{},pt=DB.party.find(i=>i.id===x.party)||{},c=comp();
+ const tv=+x.amount||0,rt=+it.gst||0,tax=tv*rt/100,intra=!!stc(pt)&&stc(pt)===stc(c);
+ return {it,pt,c,tv,rt,tax,cg:intra?tax/2:0,sg:intra?tax/2:0,ig:intra?0:tax,tot:tv+tax};
+}
+const gm=()=>RS.gm===undefined?today().slice(0,7):RS.gm;
+function gstRows(){
+ const m=gm(),rows=[];
+ [["sale"],["salereturn"]].forEach(([k])=>DB[k].filter(x=>!m||String(x.date).startsWith(m)).forEach(x=>{const g=gstCalc(x);rows.push({sec:k==="sale"?(g.pt.gstin?"B2B":"B2C"):(g.pt.gstin?"CDNR":"CDNUR"),g,x,no:docNo(k,x)})}));
+ return rows.sort((a,b)=>a.x.date<b.x.date?-1:a.x.date>b.x.date?1:0);
+}
+function gstr1Csv(){
+ const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+ const L=[["Section","GSTIN","Party","Doc No","Date","Taxable","GST %","CGST","SGST","IGST","Total"].map(q).join(",")];
+ gstRows().forEach(({sec,g,x,no})=>L.push([sec,g.pt.gstin||"",g.pt.name||"",no,fd(x.date),r2(g.tv),g.rt,r2(g.cg),r2(g.sg),r2(g.ig),r2(g.tot)].map(q).join(",")));
+ dl("GSTR1_"+(gm()||"all")+".csv",L.join("\n"),"text/csv");
+}
+R.gstlogin={t:"GST Portal Login",f(){const c=comp();return `<div style="padding:22px;line-height:1.8"><p>Company: <b>${esc(c.name||"-")}</b> &nbsp; GSTIN: <b>${esc(c.gstin||"-")}</b></p><button onclick="window.open('https://services.gst.gov.in/services/login','_blank')">GST Portal Login kholo</button> <button class="g" onclick="cpTxt('${esc(c.gstin||"")}')">GSTIN copy</button><p style="color:#6b7690;font-size:13px">Official GST portal naye tab me khulta hai. Username, password ya OTP is file me save nahi hota.</p></div>`}};
+R.gstr1={t:"Generate GSTR-1",f(){
+ const rows=gstRows(),S={};
+ rows.forEach(r=>{const a=S[r.sec]=S[r.sec]||{n:0,tv:0,tax:0};a.n++;a.tv+=r.g.tv;a.tax+=r.g.tax});
+ const ctl=`<div class="ctl"><div><label>Month (khali = sab)</label><input type="month" value="${gm()}" onchange="RS.gm=this.value;render()"></div><button onclick="gstr1Csv()">⬇ Download CSV</button></div>`;
+ const t=tbl(["Section","GSTIN","Party","Doc No","Date","Taxable","GST %","CGST","SGST","IGST","Total"],rows.map(({sec,g,x,no})=>[sec,esc(g.pt.gstin||""),esc(g.pt.name||""),esc(no),x.date,n2(g.tv),g.rt,n2(g.cg),n2(g.sg),n2(g.ig),n2(g.tot)]),Object.keys(S).map(k=>`${k}: ${S[k].n} docs, Taxable ₹${n2(S[k].tv)}, GST ₹${n2(S[k].tax)}`).join(" &nbsp;|&nbsp; "));
+ return ctl+t+`<div style="padding:10px 14px;font-size:12px;color:#6b7690">Sale/Sale Return ki amount ko taxable value maana gaya hai. GST % Item Master se aata hai. Party aur Company ka State Code same ho to CGST+SGST, warna IGST. Ye CSV summary hai, GST portal ki JSON/offline tool file nahi.</div>`}};
+RS.rmsg="Namaste {name}, {company} ki taraf se yaad dila rahe hain ki aapka ₹{amount} baaki hai. Kripya jald payment kar dein. Dhanyavaad.";
+const remMsg=p=>RS.rmsg.replace(/\{name\}/g,p.name).replace(/\{amount\}/g,n2(bal(p))).replace(/\{company\}/g,comp().name||"");
+function wa(id){const p=DB.party.find(x=>x.id===id);let ph=String(p.phone||"").replace(/\D/g,"");if(ph.length===10)ph="91"+ph;if(!ph){alert("Is party ka phone number nahi hai");return}window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(remMsg(p)),"_blank")}
+function cpRem(id){cpTxt(remMsg(DB.party.find(x=>x.id===id)))}
+R.payremind={t:"Payment Reminder",f(){
+ const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>b>0).sort((a,b)=>b[1]-a[1]);
+ const ctl=`<div style="padding:14px"><label style="margin-top:0">Message ({name}, {amount}, {company} apne aap bhar jayenge)</label><textarea rows="3" oninput="RS.rmsg=this.value">${esc(RS.rmsg)}</textarea></div>`;
+ return ctl+tbl(["Party","Phone","City","Baaki (Dr)","Reminder"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(b),`<button class="e" style="background:#25a244" onclick="wa('${p.id}')">WhatsApp</button> <button class="e" style="background:#8a94a8" onclick="cpRem('${p.id}')">Copy</button>`]),`Total baaki: ₹ ${n2(l.reduce((a,[p,b])=>a+b,0))}`)}};
+
+RS.ew={dist:"0",veh:"",tname:"",tid:""};
+const PORT={einv:{live:"https://einvoice1.gst.gov.in/",sand:"https://einv-apisandbox.nic.in/"},ewb:{live:"https://ewaybillgst.gov.in/",sand:"https://docs.ewaybillgst.gov.in/"}};
+function edocBuild(kind){
+ const x=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];if(!x)return null;
+ const g=gstCalc(x),{it,pt,c}=g,no=docNo("sale",x),iss=[],need=(v,m)=>{if(!v)iss.push(m)};
+ need(c.gstin,"Company GSTIN (Company Master)");need(c.pin,"Company Pin Code");need(stc(c),"Company State Code");
+ if(kind==="einv")need(pt.gstin,"Party GSTIN (e-invoice B2B ke liye zaroori)");
+ need(pt.pin,"Party Pin Code");need(stc(pt),"Party State Code");need(it.hsn,"Item HSN Code (Item Master)");need(it.gst!==undefined&&it.gst!=="","Item GST %");
+ const q=+x.qty||0,rate=+x.rate||0,u=UQC[it.unit]||"OTH",pin=v=>+String(v||"").replace(/\D/g,"")||0;
+ let j;
+ if(kind==="einv")j={Version:"1.1",TranDtls:{TaxSch:"GST",SupTyp:"B2B",RegRev:"N",IgstOnIntra:"N"},DocDtls:{Typ:"INV",No:no,Dt:fd(x.date)},
+  SellerDtls:{Gstin:c.gstin||"",LglNm:c.name||"",Addr1:c.address||"",Loc:c.city||"",Pin:pin(c.pin),Stcd:stc(c)},
+  BuyerDtls:{Gstin:pt.gstin||"",LglNm:pt.name||"",Pos:stc(pt),Addr1:pt.addr||"",Loc:pt.city||"",Pin:pin(pt.pin),Stcd:stc(pt)},
+  ItemList:[{SlNo:"1",PrdDesc:it.name||"",IsServc:"N",HsnCd:it.hsn||"",Qty:q,Unit:u,UnitPrice:rate,TotAmt:r2(q*rate),AssAmt:r2(g.tv),GstRt:g.rt,IgstAmt:r2(g.ig),CgstAmt:r2(g.cg),SgstAmt:r2(g.sg),TotItemVal:r2(g.tot)}],
+  ValDtls:{AssVal:r2(g.tv),CgstVal:r2(g.cg),SgstVal:r2(g.sg),IgstVal:r2(g.ig),TotInvVal:r2(g.tot)}};
+ else{const E=RS.ew;j={supplyType:"O",subSupplyType:"1",docType:"INV",docNo:no,docDate:fd(x.date),
+  fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:c.address||"",fromPlace:c.city||"",fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
+  toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:pt.addr||"",toPlace:pt.city||"",toPincode:pin(pt.pin),toStateCode:+stc(pt)||0,actToStateCode:+stc(pt)||0,
+  totalValue:r2(g.tv),cgstValue:r2(g.cg),sgstValue:r2(g.sg),igstValue:r2(g.ig),cessValue:0,totInvValue:r2(g.tot),
+  transMode:"1",transDistance:String(E.dist||"0"),transporterName:E.tname,transporterId:E.tid,vehicleNo:E.veh,vehicleType:"R",
+  itemList:[{productName:it.name||"",productDesc:it.name||"",hsnCode:+it.hsn||0,quantity:q,qtyUnit:u,taxableAmount:r2(g.tv),cgstRate:g.cg?g.rt/2:0,sgstRate:g.sg?g.rt/2:0,igstRate:g.ig?g.rt:0,cessRate:0}]};
+  if(g.tot<=50000)iss.push("Note: Invoice value ₹50,000 se kam hai, e-way bill aam taur par zaroori nahi (rules check kar lo)")}
+ return {j,iss,no};
+}
+function edocDl(kind){const r=edocBuild(kind);if(r)dl((kind==="einv"?"einvoice_":"ewaybill_")+r.no+".json",JSON.stringify(r.j,null,2),"application/json")}
+function edocCp(kind){const r=edocBuild(kind);if(r)cpTxt(JSON.stringify(r.j,null,2))}
+function edocPage0(kind,live){
+ if(!DB.sale.length)return '<div class="empty">Pehle Sale Entry banao</div>';
+ const x0=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];RS.es=x0.id;
+ const E=RS.ew,inp=(k,l,w)=>`<div style="min-width:${w||140}px"><label>${l}</label><input value="${esc(E[k])}" onchange="RS.ew.${k}=this.value;render()"></div>`;
+ const ctl=`<div class="ctl"><div style="min-width:260px"><label>Sale Entry</label><select onchange="RS.es=this.value;render()">${DB.sale.map(s=>`<option value="${s.id}" ${s.id===RS.es?"selected":""}>${esc(docNo("sale",s))} • ${s.date} • ${esc(lookup("party",s.party))} • ₹${n2(s.amount)}</option>`).join("")}</select></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
+ const r=edocBuild(kind),url=PORT[kind][live?"live":"sand"],nm=kind==="einv"?"E-Invoice":"E-Way Bill";
+ const warn=r.iss.length?`<div style="margin:0 14px;padding:10px 14px;background:#fff4de;border-radius:8px;font-size:13px"><b>Ye details bharo / check karo:</b><br>• ${r.iss.map(esc).join("<br>• ")}</div>`:`<div style="margin:0 14px;padding:10px 14px;background:#e3f7ec;border-radius:8px;font-size:13px">✔ Zaroori details poori hain</div>`;
+ const info=live?`<b>Live (Production):</b> Ye asli ${nm} hai. JSON bana kar official portal / apne GSP par upload karo. Pehle sandbox me test karna behtar hai.`:`<b>Sandbox (Testing):</b> Sirf test ke liye. Sandbox API ke through chalta hai, registration chahiye. Is page ki JSON ko testing ke liye use karo.`;
+ return ctl+warn+`<div style="padding:12px 14px;font-size:13px;color:#475069">${info}<br><span style="color:#b26a00">Ye file khud IRN / E-Way Bill number generate nahi karti. Iske liye GSP/API credentials aur server chahiye, jo ek HTML file me nahi ho sakta.</span></div>
+ <pre style="margin:0 14px 14px;padding:14px;background:#0f1a3a;color:#cfe1ff;border-radius:8px;font-size:12px;max-height:340px;overflow:auto">${esc(JSON.stringify(r.j,null,2))}</pre>
+ <div class="ctl" style="padding-top:0"><button onclick="edocDl('${kind}')">⬇ Download JSON</button><button class="g" onclick="edocCp('${kind}')">Copy JSON</button><button class="e" onclick="window.open('${url}','_blank')">${live?"Live":"Sandbox"} Portal kholo</button></div>`;
+}
+R.einvsand={t:"E-Invoice Sandbox",f:()=>edocPage("einv",0)};
+R.einvlive={t:"E-Invoice Live",f:()=>edocPage("einv",1)};
+R.ewbsand={t:"E-Way Bill Sandbox",f:()=>edocPage("ewb",0)};
+R.ewblive={t:"E-Way Bill Live",f:()=>edocPage("ewb",1)};
+
+/* ===== Webtel API console (Sandbox + Live) ===== */
+const EV="http://einvlive.webtel.in/v1.03/",EW="http://ewayasp.webtel.in/EWayBill/v1.3/";
+const SV="http://einvSandbox.webtel.in/v1.03/",SW="http://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/",SP="http://service.webtel.in/printewaysandbox/v1.3/";
+const ACTS={
+ einvl:[["gen","Generate E-Invoice (IRN)",EV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",EV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",EV+"CanIRN"],["prt","Print E-Invoice by IRN",EV+"PrintEInvByIRN"],["ewbirn","Generate e-Way Bill by IRN",EV+"GenEWaybyIRN"]],
+ einvs:[["gen","Generate E-Invoice (IRN) - Linear",SV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",SV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",SV+"CanIRN"],["prt","Print E-Invoice by IRN",SV+"PrintEInvByIRN"]],
+ ewbl:[["gen","Generate E-way Bill",EW+"GenEWB"],["genirn","Generate E-way Bill by IRN",EW+"GenEWaybyIRN"],["veh","Update Vehicle Number",EW+"UpdateVehicle"],["can","Cancel E-way Bill",EW+"CancelEWB"],["rej","Reject E-way Bill",EW+"RejectEWB"],["con","Consolidated E-Way Bill",EW+"GenConsolidatedEWB"],["get","Get E-way Bill Detail",EW+"GetEWB"],["tr","Update Transporter Id",EW+"UpdateTransporter"],["ext","Extend Validity",EW+"ExtendValidity"]],
+ ewbs:[["gen","Generate E-way Bill","https://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/GenEWB"],["genirn","Generate E-way Bill by IRN",SW+"GenEWaybyIRN"],["prt","Print Part-A (Summary)",SP+"PrintEWB2"],["prtd","Print Part-B (Details)",SP+"PrintEWBDetail2"],["can","Cancel E-way Bill",SW+"CancelEWB"],["veh","Update Vehicle Number",SW+"UpdateVehicle"],["ext","Extend Validity",SW+"ExtendValidity"]]
+};
+RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
+["l","s"].forEach(e=>{try{RS.hdr[e]=localStorage.getItem("acc_api_hdr_"+e)||"{}"}catch(x){RS.hdr[e]="{}"}});
+function hdrSet(v,e){RS.hdr[e]=v;try{localStorage.setItem("acc_api_hdr_"+e,v)}catch(x){}}
+function apiTpl(kind,act){
+ const ewbIrn={Irn:RS.irn||"",TransId:"",TransMode:"1",TransDocNo:"",TransDocDt:"",VehNo:"",Distance:0,VehType:"R",TransName:""};
+ const T={einv:{can:{Irn:RS.irn||"",CnlRsn:"1",CnlRem:"Data entry mistake"},prt:{Irn:RS.irn||""},ewbirn:ewbIrn},
+  ewb:{genirn:ewbIrn,prt:{ewbNo:""},prtd:{ewbNo:""},veh:{ewbNo:"",vehicleNo:"",fromPlace:"",fromState:0,reasonCode:"1",reasonRem:"",transDocNo:"",transDocDate:"",transMode:"1",vehicleType:"R"},
+   can:{ewbNo:"",cancelRsnCode:2,cancelRmrk:"Data entry mistake"},rej:{ewbNo:""},
+   con:{fromPlace:"",fromState:0,vehicleNo:"",transMode:"1",transDocNo:"",transDocDate:"",tripSheetEwbBills:[{ewbNo:""}]},
+   get:{ewbNo:""},tr:{ewbNo:"",transporterId:""},
+   ext:{ewbNo:"",vehicleNo:"",fromPlace:"",fromState:0,remainingDistance:0,transDocNo:"",transDocDate:"",transMode:"1",extnRsnCode:1,extnRemarks:"",fromPincode:0,consignmentStatus:"M",transitType:"",addressLine1:"",addressLine2:"",addressLine3:""}}};
+ if(act==="gen"||act==="gen2"){const r=edocBuild(kind);return r?r.j:{}}
+ return T[kind][act]||{};
+}
+function findKey(o,k){if(o&&typeof o==="object"){if(k in o&&typeof o[k]==="string")return o[k];for(const v of Object.values(o)){const r=findKey(v,k);if(r)return r}}return ""}
+function apiPanel(kind,live){
+ const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
+ if(!L.some(z=>z[0]===a.act))a.act="gen";
+ const sig=kind+e+a.act+RS.es+RS.irn+JSON.stringify(RS.ew);
+ if(a.sig!==sig){a.sig=sig;a.body=JSON.stringify(apiTpl(kind,a.act),null,2)}
+ const act=L.find(z=>z[0]===a.act);
+ return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
+ <b>⚡ Webtel API (${live?"Live":"Sandbox"})</b>
+ <label>Action</label><select onchange="RS.api.act=this.value;render()">${L.map(z=>`<option value="${z[0]}" ${z[0]===a.act?"selected":""}>${z[1]}</option>`).join("")}</select>
+ <div style="font-size:12px;color:#6b7690;margin-top:4px">POST → ${esc(act[2])}</div>
+ <label>Auth headers (JSON) — Webtel se mile ${live?"live":"sandbox"} credentials/keys</label><textarea rows="2" style="font-family:monospace" placeholder='{"Header-Name":"value"}' oninput="hdrSet(this.value,'${e}')">${esc(RS.hdr[e])}</textarea>
+ <label>IRN (generate ke baad apne aap bhar jata hai)</label><input value="${esc(RS.irn)}" onchange="RS.irn=this.value;render()">
+ <label>Request body (JSON, badal sakte ho)</label><textarea rows="10" style="font-family:monospace;font-size:12px" oninput="RS.api.body=this.value">${esc(a.body)}</textarea>
+ <div class="btns" style="justify-content:flex-start"><button onclick="apiSend('${kind}',${live?1:0})">Send to ${live?"Live":"Sandbox"} API</button></div>
+ ${a.resp?`<pre style="margin:10px 0 0;padding:12px;background:#0f1a3a;color:#d7ffe0;border-radius:8px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap">${esc(a.resp)}</pre>`:""}
+ <div style="font-size:12px;color:#b26a00;margin-top:10px">${live?"⚠ Ye LIVE API hai, bhejte hi asli document ban ya badal jata hai. ":"Sandbox sirf testing ke liye hai. "}Request ka exact format aur login headers Webtel ke documentation se match karo (body me credentials chahiye to body me bharo). Zyada tar URLs http hain, https nahi, isliye credentials bina encryption ke jaate hain. Headers aapke browser me save rehte hain. Browser se request CORS ki wajah se block ho sakti hai.</div></div>`;
+}
+async function apiSend(kind,live){
+ const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
+ try{body=JSON.parse(a.body)}catch(x){alert("Request body valid JSON nahi hai");return}
+ try{h=JSON.parse(RS.hdr[e]||"{}")}catch(x){alert("Auth headers valid JSON nahi hain");return}
+ if(live&&!confirm("LIVE API: "+act[1]+"\nAsli "+(kind==="einv"?"e-invoice":"e-way bill")+" ban/badal jayega. Pakka bhejna hai?"))return;
+ a.resp="Bhej raha hoon...";render();
+ try{
+  const r=await fetch(act[2],{method:"POST",headers:{"Content-Type":"application/json",...h},body:JSON.stringify(body)});
+  const t=await r.text();a.resp="HTTP "+r.status+"\n"+t;
+  try{const irn=findKey(JSON.parse(t),"Irn");if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;const x=DB.sale.find(z=>z.id===RS.es);if(x){x.irn=irn;save()}}}catch(x){}
+ }catch(x){a.resp="Request fail: "+x.message+"\n\nWajah: CORS block, network ya http/https mismatch ho sakta hai. Webtel se is page ka origin allow karwao ya chhota backend/proxy use karo."}
+ render();
+}
+function edocPage(kind,live){return edocPage0(kind,live)+(DB.sale.length?apiPanel(kind,live):"")}
+
+/* ===== Backup / Restore ===== */
+function bkpDl(){dl("accounts_backup_"+today()+".json",JSON.stringify({app:"acc",v:1,db:DB},null,2),"application/json")}
+function obfImport(st){
+ let cs=[];try{cs=JSON.parse(st["vd-companies"]||"[]")}catch(x){}
+ if(!cs.length){alert("Is file me companies nahi mili");return}
+ let n=0;
+ cs.forEach(c=>{const id=String(c.id);
+  if(DB.company.some(x=>x.id===id||(c.gstin&&x.gstin===c.gstin)))return;
+  DB.company.push({id,name:c.name||c.printName||"",gstin:c.gstin||"",phone:c.phone||"",city:c.state||"",address:c.address||"",pin:c.pincode||"",stcode:String(c.gstin||"").slice(0,2)});n++});
+ if(st["vd-active"]&&DB.company.some(x=>x.id===String(st["vd-active"])))RS.company=String(st["vd-active"]);
+ save();
+ alert(n+" company import hui (login password aur API key import nahi kiye).\nParty, Item aur Voucher ka data is file me mujhe abhi nahi dikha. 'Structure banao' se field names ki file bana ke bhejo.");
+ cur="company";render();
+}
+function bkpLoad(f){
+ if(!f)return;
+ const rd=new FileReader();
+ rd.onload=()=>{let j;try{j=JSON.parse(rd.result)}catch(x){alert("File valid JSON nahi hai");return}
+  if(j&&j.app==="ownfuturebright"&&j.storage){obfImport(j.storage);return}
+  const d=j&&j.db?j.db:j;
+  if(!d||!Object.keys(M).some(k=>Array.isArray(d[k]))){alert("Is file ka format is app se match nahi karta. Neeche 'Structure banao' use karke field names ki file bhejo.");return}
+  if(!confirm("Maujooda data hat kar backup ka data aa jayega. Pakka restore karna hai?"))return;
+  Object.keys(M).forEach(k=>DB[k]=Array.isArray(d[k])?d[k]:[]);
+  save();alert("Restore ho gaya");cur="dashboard";render();
+ };
+ rd.readAsText(f);
+}
+function bkpSchema(f){
+ if(!f)return;
+ const rd=new FileReader();
+ rd.onload=()=>{let j;try{j=JSON.parse(rd.result)}catch(x){alert("File valid JSON nahi hai");return}
+  const st=j.storage||j,out={};
+  Object.keys(st).forEach(k=>{
+   if(/key|token|password|secret/i.test(k)){out[k]="(hidden)";return}
+   let v=st[k];
+   if(typeof v==="string"){try{v=JSON.parse(v)}catch(x){out[k]="text, length "+String(st[k]).length;return}}
+   if(Array.isArray(v)){
+    const o={count:v.length},f0=v[0];
+    if(f0&&typeof f0==="object"){o.fields=Object.keys(f0);o.nested={};Object.keys(f0).forEach(q=>{const w=f0[q];if(Array.isArray(w)&&w[0]&&typeof w[0]==="object")o.nested[q]=Object.keys(w[0])})}
+    else o.type=typeof f0;
+    out[k]=/history/i.test(k)?{count:v.length}:o;
+   }else if(v&&typeof v==="object")out[k]={keys:Object.keys(v).slice(0,60)};
+   else out[k]=typeof v;
+  });
+  dl("backup_structure.json",JSON.stringify(out,null,2),"application/json");
+ };
+ rd.readAsText(f);
+}
+R.backup={t:"Backup / Restore",f:()=>`<div style="padding:22px;line-height:1.9"><b>Backup</b><br><button onclick="bkpDl()">⬇ Backup JSON download</button><hr style="margin:18px 0;border:0;border-top:1px solid #e6e9f2"><b>Restore</b> (is app ki backup ya ownfuturebright ki backup)<br><input type="file" accept=".json,application/json" onchange="bkpLoad(this.files[0])" style="max-width:360px"><div style="font-size:12px;color:#b26a00;margin-top:8px">Is app ki backup restore karne par maujooda data replace ho jata hai. ownfuturebright ki file se abhi sirf Companies aati hain.</div><hr style="margin:18px 0;border:0;border-top:1px solid #e6e9f2"><b>Structure banao</b> (ownfuturebright backup se)<br><input type="file" accept=".json,application/json" onchange="bkpSchema(this.files[0])" style="max-width:360px"><div style="font-size:12px;color:#6b7690;margin-top:8px">Sirf section ke naam aur field ke naam ki chhoti file banti hai. Koi value, password ya key usme nahi hoti.</div></div>`};
+
+let cur="dashboard",editId=null;
+const $=id=>document.getElementById(id);
+
+function buildNav(){
+ Object.keys(CH).forEach(p=>{if(CH[p].includes(cur))OPEN[p]=true});
+ const it=k=>CH[k]?`<a data-p="${k}"><span>${ICON[k]}</span>${T(k)}<span class="ar2">${OPEN[k]?"⌃":"⌄"}</span></a><div class="sub ${OPEN[k]?"":"shut"}">${CH[k].map(c=>`<a data-k="${c}" class="${c===cur?"on":""}">${T(c)}</a>`).join("")}</div>`:`<a data-k="${k}" class="${k===cur?"on":""}"><span>${ICON[k]}</span>${T(k)}</a>`;
+ $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks])=>`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>").join("");
+ $("nav").querySelectorAll(".gh").forEach(h=>h.onclick=()=>{OPEN[h.dataset.g]=!OPEN[h.dataset.g];buildNav()});
+ $("nav").querySelectorAll("a[data-p]").forEach(a=>a.onclick=()=>{OPEN[a.dataset.p]=!OPEN[a.dataset.p];buildNav()});
+ $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{cur=a.dataset.k;$("q").value="";render()});
+}
+
+function stockSummary(){
+ const rows=DB.item.map(i=>{
+  let q=+i.openq||0;
+  const s=(k)=>DB[k].filter(x=>x.item===i.id).reduce((a,x)=>a+(+x.qty||0),0);
+  q+=s("purchase")+s("salereturn")-s("sale")-s("purchasereturn");
+  DB.stock.filter(x=>x.item===i.id).forEach(x=>q+=(x.type==="In"?1:-1)*(+x.qty||0));
+  return `<tr><td>${esc(i.name)}</td><td>${esc(i.unit||"")}</td><td class="${q<0?"neg":""}"><b>${q}</b></td></tr>`;
+ }).join("");
+ return `<div class="card"><table><tr><th colspan="3">Current Stock (Opening + Purchase + Sale Return − Sale − Purchase Return ± Adjustment)</th></tr><tr><th>Item</th><th>Unit</th><th>Stock</th></tr>${rows||'<tr><td colspan="3" class="empty">Pehle Item Master me item banao</td></tr>'}</table></div>`;
+}
+
+function render(){
+ buildNav();renderTop();
+ const isR=!!R[cur],dash=cur==="dashboard";
+ $("add").style.display=(!isR||dash)?"":"none";$("q").style.display=isR?"none":"";
+ $("add").textContent=dash?"+ Create Company":"+ Naya Banao";
+ $("list").className=dash?"":"card";
+ if(isR){$("ttl").textContent=R[cur].t;$("extra").innerHTML="";$("list").innerHTML=R[cur].f();return}
+ const m=M[cur];
+ $("ttl").textContent=m.title;
+ $("extra").innerHTML=cur==="stock"?stockSummary():"";
+ const q=$("q").value.toLowerCase();
+ const cols=m.f.slice();
+ if(m.tx)cols.push({k:"amount",l:"Amount"});
+ let data=DB[cur].filter(r=>!q||cols.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q)));
+ if(!data.length){$("list").innerHTML='<div class="empty">Koi record nahi mila</div>';return}
+ let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
+ data.forEach((r,i)=>{
+  html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(val(f,r[f.k]))}</td>`).join("")+
+  `<td><button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
+ });
+ html+="</table>";
+ if(m.tx||cur==="receipt"||cur==="payment"||cur==="journal"){
+  const t=data.reduce((a,r)=>a+(+r.amount||0),0);
+  html+=`<div class="tot">Total: ₹ ${t.toFixed(2)}</div>`;
+ }
+ $("list").innerHTML=html;
+}
+
+function openForm(id){
+ editId=id||null;
+ const m=M[cur],rec=id?DB[cur].find(x=>x.id===id):{};
+ $("dt").textContent=(id?"Edit ":"Naya ")+m.title;
+ $("frm").innerHTML=m.f.map(f=>{
+  const v=rec[f.k]??(f.t==="date"?today():"");
+  let inp;
+  if(f.src){
+   inp=`<select id="f_${f.k}"><option value="">-- Select --</option>`+DB[f.src].map(o=>`<option value="${o.id}" ${o.id===v?"selected":""}>${esc(o.name)}</option>`).join("")+"</select>";
+  }else if(f.opts){
+   inp=`<select id="f_${f.k}">`+f.opts.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")+"</select>";
+  }else if(f.t==="textarea"){inp=`<textarea id="f_${f.k}" rows="2">${esc(v)}</textarea>`}
+  else inp=`<input id="f_${f.k}" type="${f.t||"text"}" ${f.t==="number"?'step="any"':""} value="${esc(v)}">`;
+  return `<label>${f.l}${f.r?" *":""}</label>${inp}`;
+ }).join("")+(m.tx?'<div class="tot" id="amt"></div>':"");
+ if(m.tx){
+  const calc=()=>{$("amt").textContent="Amount: ₹ "+((+$("f_qty").value||0)*(+$("f_rate").value||0)).toFixed(2)};
+  $("f_qty").oninput=$("f_rate").oninput=calc;
+  $("f_item").onchange=()=>{
+   const it=DB.item.find(x=>x.id===$("f_item").value);
+   if(it&&!$("f_rate").value)$("f_rate").value=(cur==="sale"||cur==="purchasereturn")?(it.srate||""):(it.prate||"");
+   if(cur==="sale"||cur==="salereturn"){if(it)$("f_rate").value=it.srate||""}
+   if(cur==="purchase"||cur==="purchasereturn"){if(it)$("f_rate").value=it.prate||""}
+   calc();
+  };
+  calc();
+ }
+ $("dlg").showModal();
+}
+
+function saveForm(){
+ const m=M[cur],rec={};
+ for(const f of m.f){
+  const v=$("f_"+f.k).value.trim();
+  if(f.r&&!v){alert(f.l+" zaroori hai");return}
+  rec[f.k]=v;
+ }
+ if(cur==="journal"&&rec.dr===rec.cr){alert("Debit aur Credit account alag hone chahiye");return}
+ if(m.tx)rec.amount=((+rec.qty||0)*(+rec.rate||0)).toFixed(2);
+ if(editId){const i=DB[cur].findIndex(x=>x.id===editId);DB[cur][i]={...DB[cur][i],...rec}}
+ else DB[cur].push({id:uid(),...rec});
+ save();$("dlg").close();render();
+}
+
+function del(id){
+ if(!confirm("Pakka delete karna hai?"))return;
+ if(cur==="party"||cur==="item"){
+  const used=Object.keys(M).some(k=>k!==cur&&DB[k].some(r=>r.party===id||r.item===id||r.dr===id||r.cr===id));
+  if(used&&!confirm("Ye record kisi entry me use hua hai. Phir bhi delete karein?"))return;
+ }
+ DB[cur]=DB[cur].filter(x=>x.id!==id);
+ save();render();
+}
+
+$("add").onclick=()=>{if(cur==="dashboard"){cur="company";render()}openForm()};
+$("sv").onclick=saveForm;
+$("cx").onclick=()=>$("dlg").close();
+$("q").oninput=render;
+render();
+</script>
+</body>
+</html>
