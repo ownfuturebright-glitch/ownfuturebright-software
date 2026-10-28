@@ -719,8 +719,8 @@ function sfUpd(){
 function sfSet(k,v,live){RS.sf[k]=v;if(k==="no"){const e=$("sf_full");if(e)e.value=sfFull()}}
 function sfParty(id){const f=RS.sf,pt=DB.party.find(p=>p.id===id)||{};f.party=id;f.gstin=pt.gstin||"";f.pos=stc(pt)||f.pos||stc(comp());render()}
 function sfRow(i,k,v){RS.sf.items[i][k]=v;sfUpd()}
-function sfPick(i,name){
- const l=RS.sf.items[i],n=String(name).trim().toLowerCase(),it=DB.item.find(z=>z.name.toLowerCase()===n||(z.code&&z.code.toLowerCase()===n));
+function sfPick(i,name,io){
+ const l=RS.sf.items[i],n=String(name).trim().toLowerCase(),it=io||DB.item.find(z=>z.name.toLowerCase()===n||(z.code&&z.code.toLowerCase()===n));
  l.name=name;
  if(it){l.item=it.id;l.name=it.name;l.hsn=it.hsn||"";l.unit=UNITS.find(u=>u.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos";l.rate=it[KC[cur].rate]||"";l.gst=(it.gst!==undefined&&it.gst!=="")?String(it.gst):"18"}
  else l.item="";
@@ -730,6 +730,13 @@ function sfNewParty(){
  const k=cur,sup=k==="purchase"||k==="purchasereturn";
  RS.ret=k;RS.newParty=null;cur="party";render();openForm();
  const t=$("f_type");if(t)t.value=sup?"Supplier":"Customer";
+}
+function sfNewItem(){RS.ret=cur;RS.newParty=null;RS.newItem=null;cur="item";render();openForm()}
+function sfItemNew(id){
+ const it=DB.item.find(z=>z.id===id);if(!it||!RS.sf)return;
+ let i=RS.sf.items.findIndex(l=>!l.item&&!l.name);
+ if(i<0){RS.sf.items.push(blankLine());i=RS.sf.items.length-1}
+ sfPick(i,it.name,it);
 }
 function sfAdd(){RS.sf.items.push(blankLine());render()}
 function sfDel(i){if(RS.sf.items.length>1){RS.sf.items.splice(i,1);render()}}
@@ -790,7 +797,7 @@ function renderSale(){
  $("list").innerHTML=`<div class="sc"><div class="hd2"><div class="hico">🧾</div><div style="flex:1"><b style="font-size:17px">${K.head}</b><div style="font-size:11px;color:#6b7690;margin-top:2px">${esc(c.name||"No company selected")} • GSTIN: ${esc(c.gstin||"-")}</div></div><span class="bdg ${m.intra?"a":"w"}">${m.intra?"INTRA-STATE":"INTER-STATE"}</span></div>
  <div class="sb g4" style="border-top:1px solid #eceff5"><div><label>${K.no} *</label><input value="${esc(f.no)}" oninput="sfSet('no',this.value)"></div><div><label>Date *</label><input type="date" value="${esc(f.date)}" onchange="sfSet('date',this.value)"></div><div><label>Full Number Preview</label><input class="ro" id="sf_full" readonly value="${esc(sfFull())}"></div><div><label>${K.type}</label><input class="ro" readonly value="${m.intra?K.local:K.inter}"></div></div></div>
  <div class="sc"><div class="sh">Party Details</div><div class="sb g4"><div><div style="display:flex;justify-content:space-between;align-items:baseline"><label>${K.pl} *</label><a class="lnk" onclick="sfNewParty()">+ Add New ${K.pl.replace(" Name","")}</a></div><select onchange="sfParty(this.value)"><option value="">Select ${K.pl.replace(" Name","").toLowerCase()}</option>${DB.party.filter(K.f).map(p=>`<option value="${p.id}" ${p.id===f.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div><div><label>GSTIN</label><input value="${esc(f.gstin)}" oninput="sfSet('gstin',this.value.toUpperCase())"></div><div><label>${K.pos}</label><select onchange="sfSet('pos',this.value);render()">${f.pos&&!stName(f.pos)?`<option value="${esc(f.pos)}" selected>${esc(f.pos)}</option>`:""}${STATES.map(z=>`<option value="${z[0]}" ${z[0]===f.pos?"selected":""}>${z[1]}</option>`).join("")}</select></div><div><label>Tax Type</label><input class="ro" readonly value="${m.intra?"CGST + SGST":"IGST"}"></div></div></div>
- <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfAdd()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
+ <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfNewItem()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
  <datalist id="dl_items">${DB.item.map(i=>`<option value="${esc(i.name)}"></option>`).join("")}</datalist>
  <div class="sbot"><div class="sc" style="margin:0"><div class="sb"><label>Narration / Remarks</label><textarea rows="4" placeholder="Optional invoice narration..." oninput="sfSet('remark',this.value)">${esc(f.remark)}</textarea><div class="btns" style="justify-content:flex-start;margin-top:22px"><button class="ol" onclick="sfClear()">Clear</button><button class="ol" onclick="salePrintForm()">🖨 Print / Export</button><button class="isave" onclick="saleSave()">${SAVEICO} Save Invoice (F2)</button></div></div></div>
  <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()"><b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b></span></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
@@ -902,7 +909,7 @@ function saveForm(){
  if(cur==="journal"&&rec.dr===rec.cr){alert("Debit and Credit accounts must be different");return}
  if(m.tx)rec.amount=((+rec.qty||0)*(+rec.rate||0)).toFixed(2);
  if(editId){const i=DB[cur].findIndex(x=>x.id===editId);DB[cur][i]={...DB[cur][i],...rec}}
- else{const nid=uid();DB[cur].push({id:nid,...rec});if(RS.ret&&cur==="party")RS.newParty=nid}
+ else{const nid=uid();DB[cur].push({id:nid,...rec});if(RS.ret){if(cur==="party")RS.newParty=nid;if(cur==="item")RS.newItem=nid}}
  save();$("dlg").close();render();
 }
 
@@ -920,7 +927,7 @@ $("add").onclick=()=>{if(KC[cur]&&RS.sf){RS.sf=null;render();return}if(cur==="da
 document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}});
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
-$("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty;RS.ret=null;RS.newParty=null;cur=k;render();if(np&&RS.sf)sfParty(np)}});
+$("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty,ni=RS.newItem;RS.ret=null;RS.newParty=null;RS.newItem=null;cur=k;render();if(np&&RS.sf)sfParty(np);if(ni&&RS.sf)sfItemNew(ni)}});
 $("q").oninput=render;
 render();
 bkInit();
