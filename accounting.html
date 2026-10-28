@@ -691,25 +691,29 @@ const KC={
 const blankLine=()=>({item:"",name:"",hsn:"",unit:"Nos",qty:"",rate:"",disc:"",gst:"18"});
 const invNextNum=k=>{const d=invSaved(k),v=invNext(k,d);return v.slice(d.prefix.trim().length,v.length-d.suffix.trim().length)};
 const sfFull=()=>{const d=invSaved(cur);return invAuto(cur)?d.prefix+RS.sf.no+d.suffix:RS.sf.no};
-function newSaleForm(){const c=comp();return {kind:cur,id:"",no:invAuto(cur)?invNextNum(cur):"",date:today(),party:"",gstin:"",pos:stc(c)||"",remark:"",items:[blankLine()]}}
+function newSaleForm(){const c=comp();return {kind:cur,id:"",no:invAuto(cur)?invNextNum(cur):"",date:today(),party:"",gstin:"",pos:stc(c)||"",remark:"",dtype:"pct",dval:"",items:[blankLine()]}}
 function saleFromRec(x){
  const pt=DB.party.find(p=>p.id===x.party)||{};let no=x.invNo||x.inv||"";
  if(!x.invNo&&invAuto(cur)){const d=invSaved(cur);if(no.startsWith(d.prefix)&&no.endsWith(d.suffix)&&no.length>=d.prefix.length+d.suffix.length)no=no.slice(d.prefix.length,no.length-d.suffix.length)}
- return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",
+ return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",
   items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
 function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.sf=x?saleFromRec(x):newSaleForm();render()}
 function sfCompute(){
- const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp());let tv=0,dc=0,cg=0,sg=0,ig=0;
- const L=f.items.map(l=>{const q=+l.qty||0,r=+l.rate||0,gross=q*r,d=gross*(+l.disc||0)/100,t=gross-d,tx=t*(+l.gst||0)/100;
-  const o={t,d,cg:intra?tx/2:0,sg:intra?tx/2:0,ig:intra?0:tx,tot:t+tx};tv+=t;dc+=d;cg+=o.cg;sg+=o.sg;ig+=o.ig;return o});
+ const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp());
+ const pre=f.items.map(l=>{const gross=(+l.qty||0)*(+l.rate||0),d=gross*(+l.disc||0)/100;return {d,t0:gross-d}});
+ const sub=pre.reduce((a,o)=>a+o.t0,0),dv=Math.max(+f.dval||0,0);
+ const idisc=sub>0?(f.dtype==="amt"?Math.min(dv,sub):sub*Math.min(dv,100)/100):0;
+ let tv=0,dc=0,cg=0,sg=0,ig=0;
+ const L=f.items.map((l,i)=>{const o0=pre[i],share=sub>0?idisc*o0.t0/sub:0,t=o0.t0-share,tx=t*(+l.gst||0)/100;
+  const o={t,d:o0.d+share,cg:intra?tx/2:0,sg:intra?tx/2:0,ig:intra?0:tx,tot:t+tx};tv+=t;dc+=o.d;cg+=o.cg;sg+=o.sg;ig+=o.ig;return o});
  const tot=tv+cg+sg+ig,grand=Math.round(tot);
- return {L,tv,dc,cg,sg,ig,tot,round:grand-tot,grand,intra};
+ return {L,sub,idisc,tv,dc,cg,sg,ig,tot,round:grand-tot,grand,intra};
 }
 function sfUpd(){
  const m=sfCompute(),S=(id,v)=>{const e=$(id);if(e)e.textContent=v},R0=v=>"₹"+n2(v);
  m.L.forEach((o,i)=>{S("c_t"+i,R0(o.t));S("c_c"+i,R0(o.cg));S("c_s"+i,R0(o.sg));S("c_g"+i,R0(o.ig));S("c_o"+i,R0(o.tot))});
- S("t_tv",R0(m.tv));S("t_dc",R0(m.dc));S("t_cg",R0(m.cg));S("t_sg",R0(m.sg));S("t_ig",R0(m.ig));
+ S("t_sub",R0(m.sub));S("t_id","−"+R0(m.idisc));S("t_tv",R0(m.tv));S("t_dc",R0(m.dc));S("t_cg",R0(m.cg));S("t_sg",R0(m.sg));S("t_ig",R0(m.ig));
  S("t_rd",(m.round>=0?"+":"−")+R0(Math.abs(m.round)));S("t_gt",R0(m.grand));
 }
 function sfSet(k,v,live){RS.sf[k]=v;if(k==="no"){const e=$("sf_full");if(e)e.value=sfFull()}}
@@ -722,6 +726,11 @@ function sfPick(i,name){
  else l.item="";
  render();
 }
+function sfNewParty(){
+ const k=cur,sup=k==="purchase"||k==="purchasereturn";
+ RS.ret=k;RS.newParty=null;cur="party";render();openForm();
+ const t=$("f_type");if(t)t.value=sup?"Supplier":"Customer";
+}
 function sfAdd(){RS.sf.items.push(blankLine());render()}
 function sfDel(i){if(RS.sf.items.length>1){RS.sf.items.splice(i,1);render()}}
 function sfClear(){if(confirm("Clear this invoice and start again?")){RS.sf=newSaleForm();render()}}
@@ -730,7 +739,7 @@ function sfBuild(){
  const f=RS.sf,m=sfCompute(),items=[];
  f.items.forEach((l,i)=>{if(!l.item&&!l.name&&!(+l.qty))return;const o=m.L[i];
   items.push({item:l.item,hsn:l.hsn,unit:l.unit,qty:+l.qty||0,rate:+l.rate||0,disc:+l.disc||0,gst:+l.gst||0,taxable:r2(o.t),cg:r2(o.cg),sg:r2(o.sg),ig:r2(o.ig),total:r2(o.tot)})});
- return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
+ return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,invDisc:r2(m.idisc),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
 }
 function saleSave(){
  const f=RS.sf;if(!f)return;const rec=sfBuild();
@@ -749,7 +758,7 @@ function salePrint(rec,k){
  const rows=g.lines.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(lookup("item",l.item))}</td><td>${esc(l.hsn||"")}</td><td>${l.qty} ${esc(l.unit||"")}</td><td>${n2(l.rate)}</td><td>${n2(l.disc||0)}</td><td>${n2(l.t)}</td><td>${l.r}%</td><td>${n2(l.t+l.tx)}</td></tr>`).join("");
  const rd=+rec.round||0,gt=rec.taxable!==undefined?+rec.amount:g.tot;
  const w=window.open("","_blank");if(!w){alert("Please allow pop-ups to print");return}
- w.document.write(`<html><head><title>${K.doc} ${esc(rec.inv||"")}</title><style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}th{background:#f0f0f0}.r{text-align:right}h2{margin:0}</style></head><body><div style="display:flex;justify-content:space-between"><div><h2>${esc(c.name||"")}</h2><div>${esc(c.address||"")}</div><div>GSTIN: ${esc(c.gstin||"-")}</div></div><div style="text-align:right"><h2>${K.doc}</h2><div>${K.no.replace(".","")}: <b>${esc(rec.inv||"-")}</b></div><div>Date: ${esc(fd(rec.date))}</div></div></div><hr><div><b>${K.bill}:</b> ${esc(pt.name||"-")}<br>GSTIN: ${esc(rec.gstin!==undefined?rec.gstin:(pt.gstin||"-"))||"-"}<br>${K.pos}: ${esc(stName(g.pos)||"-")}</div><table><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc %</th><th>Taxable</th><th>GST</th><th>Total</th></tr>${rows}</table><table style="width:300px;margin-left:auto"><tr><td>Taxable Value</td><td class="r">${n2(g.tv)}</td></tr>${g.intra?`<tr><td>CGST</td><td class="r">${n2(g.cg)}</td></tr><tr><td>SGST</td><td class="r">${n2(g.sg)}</td></tr>`:`<tr><td>IGST</td><td class="r">${n2(g.ig)}</td></tr>`}<tr><td>Round Off</td><td class="r">${n2(rd)}</td></tr><tr><td><b>Grand Total</b></td><td class="r"><b>₹${n2(gt)}</b></td></tr></table>${rec.remark?`<p><b>Narration:</b> ${esc(rec.remark)}</p>`:""}</body></html>`);
+ w.document.write(`<html><head><title>${K.doc} ${esc(rec.inv||"")}</title><style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}th{background:#f0f0f0}.r{text-align:right}h2{margin:0}</style></head><body><div style="display:flex;justify-content:space-between"><div><h2>${esc(c.name||"")}</h2><div>${esc(c.address||"")}</div><div>GSTIN: ${esc(c.gstin||"-")}</div></div><div style="text-align:right"><h2>${K.doc}</h2><div>${K.no.replace(".","")}: <b>${esc(rec.inv||"-")}</b></div><div>Date: ${esc(fd(rec.date))}</div></div></div><hr><div><b>${K.bill}:</b> ${esc(pt.name||"-")}<br>GSTIN: ${esc(rec.gstin!==undefined?rec.gstin:(pt.gstin||"-"))||"-"}<br>${K.pos}: ${esc(stName(g.pos)||"-")}</div><table><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc %</th><th>Taxable</th><th>GST</th><th>Total</th></tr>${rows}</table><table style="width:300px;margin-left:auto">${+rec.invDisc>0?`<tr><td>Invoice Discount</td><td class="r">-${n2(rec.invDisc)}</td></tr>`:""}<tr><td>Taxable Value</td><td class="r">${n2(g.tv)}</td></tr>${g.intra?`<tr><td>CGST</td><td class="r">${n2(g.cg)}</td></tr><tr><td>SGST</td><td class="r">${n2(g.sg)}</td></tr>`:`<tr><td>IGST</td><td class="r">${n2(g.ig)}</td></tr>`}<tr><td>Round Off</td><td class="r">${n2(rd)}</td></tr><tr><td><b>Grand Total</b></td><td class="r"><b>₹${n2(gt)}</b></td></tr></table>${rec.remark?`<p><b>Narration:</b> ${esc(rec.remark)}</p>`:""}</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 const salePrintId=id=>{const x=DB[cur].find(s=>s.id===id);if(x)salePrint(x,cur)};
@@ -780,11 +789,11 @@ function renderSale(){
  const R0=v=>"₹"+n2(v);
  $("list").innerHTML=`<div class="sc"><div class="hd2"><div class="hico">🧾</div><div style="flex:1"><b style="font-size:17px">${K.head}</b><div style="font-size:11px;color:#6b7690;margin-top:2px">${esc(c.name||"No company selected")} • GSTIN: ${esc(c.gstin||"-")}</div></div><span class="bdg ${m.intra?"a":"w"}">${m.intra?"INTRA-STATE":"INTER-STATE"}</span></div>
  <div class="sb g4" style="border-top:1px solid #eceff5"><div><label>${K.no} *</label><input value="${esc(f.no)}" oninput="sfSet('no',this.value)"></div><div><label>Date *</label><input type="date" value="${esc(f.date)}" onchange="sfSet('date',this.value)"></div><div><label>Full Number Preview</label><input class="ro" id="sf_full" readonly value="${esc(sfFull())}"></div><div><label>${K.type}</label><input class="ro" readonly value="${m.intra?K.local:K.inter}"></div></div></div>
- <div class="sc"><div class="sh">Party Details</div><div class="sb g4"><div><label>${K.pl} *</label><select onchange="sfParty(this.value)"><option value="">Select ${K.pl.replace(" Name","").toLowerCase()}</option>${DB.party.filter(K.f).map(p=>`<option value="${p.id}" ${p.id===f.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div><div><label>GSTIN</label><input value="${esc(f.gstin)}" oninput="sfSet('gstin',this.value.toUpperCase())"></div><div><label>${K.pos}</label><select onchange="sfSet('pos',this.value);render()">${f.pos&&!stName(f.pos)?`<option value="${esc(f.pos)}" selected>${esc(f.pos)}</option>`:""}${STATES.map(z=>`<option value="${z[0]}" ${z[0]===f.pos?"selected":""}>${z[1]}</option>`).join("")}</select></div><div><label>Tax Type</label><input class="ro" readonly value="${m.intra?"CGST + SGST":"IGST"}"></div></div></div>
+ <div class="sc"><div class="sh">Party Details</div><div class="sb g4"><div><div style="display:flex;justify-content:space-between;align-items:baseline"><label>${K.pl} *</label><a class="lnk" onclick="sfNewParty()">+ Add New ${K.pl.replace(" Name","")}</a></div><select onchange="sfParty(this.value)"><option value="">Select ${K.pl.replace(" Name","").toLowerCase()}</option>${DB.party.filter(K.f).map(p=>`<option value="${p.id}" ${p.id===f.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div><div><label>GSTIN</label><input value="${esc(f.gstin)}" oninput="sfSet('gstin',this.value.toUpperCase())"></div><div><label>${K.pos}</label><select onchange="sfSet('pos',this.value);render()">${f.pos&&!stName(f.pos)?`<option value="${esc(f.pos)}" selected>${esc(f.pos)}</option>`:""}${STATES.map(z=>`<option value="${z[0]}" ${z[0]===f.pos?"selected":""}>${z[1]}</option>`).join("")}</select></div><div><label>Tax Type</label><input class="ro" readonly value="${m.intra?"CGST + SGST":"IGST"}"></div></div></div>
  <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfAdd()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
  <datalist id="dl_items">${DB.item.map(i=>`<option value="${esc(i.name)}"></option>`).join("")}</datalist>
  <div class="sbot"><div class="sc" style="margin:0"><div class="sb"><label>Narration / Remarks</label><textarea rows="4" placeholder="Optional invoice narration..." oninput="sfSet('remark',this.value)">${esc(f.remark)}</textarea><div class="btns" style="justify-content:flex-start;margin-top:22px"><button class="ol" onclick="sfClear()">Clear</button><button class="ol" onclick="salePrintForm()">🖨 Print / Export</button><button class="isave" onclick="saleSave()">${SAVEICO} Save Invoice (F2)</button></div></div></div>
- <div class="sc" style="margin:0"><div class="sb tp"><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
+ <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()"><b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b></span></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
 }
 ["sale","purchase","salereturn","purchasereturn"].forEach(k=>{R[k+"register"].f=function(){
  const l=DB[k].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
@@ -893,7 +902,7 @@ function saveForm(){
  if(cur==="journal"&&rec.dr===rec.cr){alert("Debit and Credit accounts must be different");return}
  if(m.tx)rec.amount=((+rec.qty||0)*(+rec.rate||0)).toFixed(2);
  if(editId){const i=DB[cur].findIndex(x=>x.id===editId);DB[cur][i]={...DB[cur][i],...rec}}
- else DB[cur].push({id:uid(),...rec});
+ else{const nid=uid();DB[cur].push({id:nid,...rec});if(RS.ret&&cur==="party")RS.newParty=nid}
  save();$("dlg").close();render();
 }
 
@@ -911,6 +920,7 @@ $("add").onclick=()=>{if(KC[cur]&&RS.sf){RS.sf=null;render();return}if(cur==="da
 document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}});
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
+$("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty;RS.ret=null;RS.newParty=null;cur=k;render();if(np&&RS.sf)sfParty(np)}});
 $("q").oninput=render;
 render();
 bkInit();
