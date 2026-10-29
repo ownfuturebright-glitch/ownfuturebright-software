@@ -327,7 +327,7 @@ function gstCalc(x){
  const pos=x.pos||stc(pt0),intra=!!pos&&pos===stc(c);
  const L=lines(x).map(l=>{const t=+l.taxable||0,r=+l.gst||0;return {...l,t,r,tx:t*r/100}});
  const tv=L.reduce((a,l)=>a+l.t,0),tax=L.reduce((a,l)=>a+l.tx,0),rs=new Set(L.map(l=>l.r));
- return {it:DB.item.find(i=>i.id===(L[0]||{}).item)||{},pt,c,lines:L,tv,rt:rs.size===1?[...rs][0]:"",tax,intra,pos,cg:intra?tax/2:0,sg:intra?tax/2:0,ig:intra?0:tax,tot:tv+tax};
+ return {it:DB.item.find(i=>i.id===(L[0]||{}).item)||{},pt,c,lines:L,tv,rt:rs.size===1?[...rs][0]:"",tax,intra,pos,cg:intra?tax/2:0,sg:intra?tax/2:0,ig:intra?0:tax,tot:tv+tax-(+x.postDisc||0)};
 }
 const gm=()=>RS.gm===undefined?today().slice(0,7):RS.gm;
 function gstRows(){
@@ -371,7 +371,7 @@ function edocBuild(kind){
  const IL=g.lines.map((l,i)=>{const it=DB.item.find(z=>z.id===l.item)||{},hsn=l.hsn||it.hsn||"";
   need(hsn,"HSN Code for item "+(i+1)+" ("+(it.name||"-")+")");
   return {it,hsn,l,q:+l.qty||0,rate:+l.rate||0,u:UQC[l.unit||it.unit]||"OTH",s:sp(l.tx)}});
- const T=sp(g.tax),rnd=+x.round||0,inv=r2(g.tv+g.tax+rnd),dsc=IL.reduce((a,o)=>a+Math.max(0,o.q*o.rate-o.l.t),0);
+ const T=sp(g.tax),rnd=+x.round||0,pd=+x.postDisc||0,inv=r2(g.tv+g.tax-pd+rnd),dsc=pd;
  let j;
  if(kind==="einv")j={Version:"1.1",TranDtls:{TaxSch:"GST",SupTyp:"B2B",RegRev:"N",IgstOnIntra:"N"},DocDtls:{Typ:"INV",No:no,Dt:fd(x.date)},
   SellerDtls:{Gstin:c.gstin||"",LglNm:c.name||"",Addr1:c.address||"",Loc:c.city||"",Pin:pin(c.pin),Stcd:stc(c)},
@@ -691,29 +691,30 @@ const KC={
 const blankLine=()=>({item:"",name:"",hsn:"",unit:"Nos",qty:"",rate:"",disc:"",gst:"18"});
 const invNextNum=k=>{const d=invSaved(k),v=invNext(k,d);return v.slice(d.prefix.trim().length,v.length-d.suffix.trim().length)};
 const sfFull=()=>{const d=invSaved(cur);return invAuto(cur)?d.prefix+RS.sf.no+d.suffix:RS.sf.no};
-function newSaleForm(){const c=comp();return {kind:cur,id:"",no:invAuto(cur)?invNextNum(cur):"",date:today(),party:"",gstin:"",pos:stc(c)||"",remark:"",dtype:"pct",dval:"",items:[blankLine()]}}
+function newSaleForm(){const c=comp();return {kind:cur,id:"",no:invAuto(cur)?invNextNum(cur):"",date:today(),party:"",gstin:"",pos:stc(c)||"",remark:"",dtype:"pct",dval:"",dmode:"post",items:[blankLine()]}}
 function saleFromRec(x){
  const pt=DB.party.find(p=>p.id===x.party)||{};let no=x.invNo||x.inv||"";
  if(!x.invNo&&invAuto(cur)){const d=invSaved(cur);if(no.startsWith(d.prefix)&&no.endsWith(d.suffix)&&no.length>=d.prefix.length+d.suffix.length)no=no.slice(d.prefix.length,no.length-d.suffix.length)}
- return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",
+ return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:x.discMode||"pre",
   items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
 function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.sf=x?saleFromRec(x):newSaleForm();render()}
 function sfCompute(){
- const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp());
+ const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp()),post=f.dmode!=="pre";
  const pre=f.items.map(l=>{const gross=(+l.qty||0)*(+l.rate||0),d=gross*(+l.disc||0)/100;return {d,t0:gross-d}});
  const sub=pre.reduce((a,o)=>a+o.t0,0),dv=Math.max(+f.dval||0,0);
- const idisc=sub>0?(f.dtype==="amt"?Math.min(dv,sub):sub*Math.min(dv,100)/100):0;
+ const cap=base=>base>0?(f.dtype==="amt"?Math.min(dv,base):base*Math.min(dv,100)/100):0;
+ const idPre=post?0:cap(sub);
  let tv=0,dc=0,cg=0,sg=0,ig=0;
- const L=f.items.map((l,i)=>{const o0=pre[i],share=sub>0?idisc*o0.t0/sub:0,t=o0.t0-share,tx=t*(+l.gst||0)/100;
+ const L=f.items.map((l,i)=>{const o0=pre[i],share=sub>0?idPre*o0.t0/sub:0,t=o0.t0-share,tx=t*(+l.gst||0)/100;
   const o={t,d:o0.d+share,cg:intra?tx/2:0,sg:intra?tx/2:0,ig:intra?0:tx,tot:t+tx};tv+=t;dc+=o.d;cg+=o.cg;sg+=o.sg;ig+=o.ig;return o});
- const tot=tv+cg+sg+ig,grand=Math.round(tot);
- return {L,sub,idisc,tv,dc,cg,sg,ig,tot,round:grand-tot,grand,intra};
+ const gross=tv+cg+sg+ig,idPost=post?cap(gross):0,tot=gross-idPost,grand=Math.round(tot);
+ return {L,sub,idisc:post?idPost:idPre,idPost,post,tv,dc:dc+idPost,cg,sg,ig,gross,tot,round:grand-tot,grand,intra};
 }
 function sfUpd(){
  const m=sfCompute(),S=(id,v)=>{const e=$(id);if(e)e.textContent=v},R0=v=>"₹"+n2(v);
  m.L.forEach((o,i)=>{S("c_t"+i,R0(o.t));S("c_c"+i,R0(o.cg));S("c_s"+i,R0(o.sg));S("c_g"+i,R0(o.ig));S("c_o"+i,R0(o.tot))});
- S("t_sub",R0(m.sub));S("t_id","−"+R0(m.idisc));S("t_tv",R0(m.tv));S("t_dc",R0(m.dc));S("t_cg",R0(m.cg));S("t_sg",R0(m.sg));S("t_ig",R0(m.ig));
+ S("t_sub",R0(m.sub));S("t_id","−"+R0(m.idisc));S("t_pd","−"+R0(m.idPost));S("t_tv",R0(m.tv));S("t_dc",R0(m.dc));S("t_cg",R0(m.cg));S("t_sg",R0(m.sg));S("t_ig",R0(m.ig));
  S("t_rd",(m.round>=0?"+":"−")+R0(Math.abs(m.round)));S("t_gt",R0(m.grand));
 }
 function sfSet(k,v,live){RS.sf[k]=v;if(k==="no"){const e=$("sf_full");if(e)e.value=sfFull()}}
@@ -746,7 +747,7 @@ function sfBuild(){
  const f=RS.sf,m=sfCompute(),items=[];
  f.items.forEach((l,i)=>{if(!l.item&&!l.name&&!(+l.qty))return;const o=m.L[i];
   items.push({item:l.item,hsn:l.hsn,unit:l.unit,qty:+l.qty||0,rate:+l.rate||0,disc:+l.disc||0,gst:+l.gst||0,taxable:r2(o.t),cg:r2(o.cg),sg:r2(o.sg),ig:r2(o.ig),total:r2(o.tot)})});
- return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,invDisc:r2(m.idisc),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
+ return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,discMode:f.dmode==="pre"?"pre":"post",invDisc:r2(m.idisc),postDisc:r2(m.idPost),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
 }
 function saleSave(){
  const f=RS.sf;if(!f)return;const rec=sfBuild();
@@ -765,7 +766,7 @@ function salePrint(rec,k){
  const rows=g.lines.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(lookup("item",l.item))}</td><td>${esc(l.hsn||"")}</td><td>${l.qty} ${esc(l.unit||"")}</td><td>${n2(l.rate)}</td><td>${n2(l.disc||0)}</td><td>${n2(l.t)}</td><td>${l.r}%</td><td>${n2(l.t+l.tx)}</td></tr>`).join("");
  const rd=+rec.round||0,gt=rec.taxable!==undefined?+rec.amount:g.tot;
  const w=window.open("","_blank");if(!w){alert("Please allow pop-ups to print");return}
- w.document.write(`<html><head><title>${K.doc} ${esc(rec.inv||"")}</title><style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}th{background:#f0f0f0}.r{text-align:right}h2{margin:0}</style></head><body><div style="display:flex;justify-content:space-between"><div><h2>${esc(c.name||"")}</h2><div>${esc(c.address||"")}</div><div>GSTIN: ${esc(c.gstin||"-")}</div></div><div style="text-align:right"><h2>${K.doc}</h2><div>${K.no.replace(".","")}: <b>${esc(rec.inv||"-")}</b></div><div>Date: ${esc(fd(rec.date))}</div></div></div><hr><div><b>${K.bill}:</b> ${esc(pt.name||"-")}<br>GSTIN: ${esc(rec.gstin!==undefined?rec.gstin:(pt.gstin||"-"))||"-"}<br>${K.pos}: ${esc(stName(g.pos)||"-")}</div><table><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc %</th><th>Taxable</th><th>GST</th><th>Total</th></tr>${rows}</table><table style="width:300px;margin-left:auto">${+rec.invDisc>0?`<tr><td>Invoice Discount</td><td class="r">-${n2(rec.invDisc)}</td></tr>`:""}<tr><td>Taxable Value</td><td class="r">${n2(g.tv)}</td></tr>${g.intra?`<tr><td>CGST</td><td class="r">${n2(g.cg)}</td></tr><tr><td>SGST</td><td class="r">${n2(g.sg)}</td></tr>`:`<tr><td>IGST</td><td class="r">${n2(g.ig)}</td></tr>`}<tr><td>Round Off</td><td class="r">${n2(rd)}</td></tr><tr><td><b>Grand Total</b></td><td class="r"><b>₹${n2(gt)}</b></td></tr></table>${rec.remark?`<p><b>Narration:</b> ${esc(rec.remark)}</p>`:""}</body></html>`);
+ w.document.write(`<html><head><title>${K.doc} ${esc(rec.inv||"")}</title><style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}th{background:#f0f0f0}.r{text-align:right}h2{margin:0}</style></head><body><div style="display:flex;justify-content:space-between"><div><h2>${esc(c.name||"")}</h2><div>${esc(c.address||"")}</div><div>GSTIN: ${esc(c.gstin||"-")}</div></div><div style="text-align:right"><h2>${K.doc}</h2><div>${K.no.replace(".","")}: <b>${esc(rec.inv||"-")}</b></div><div>Date: ${esc(fd(rec.date))}</div></div></div><hr><div><b>${K.bill}:</b> ${esc(pt.name||"-")}<br>GSTIN: ${esc(rec.gstin!==undefined?rec.gstin:(pt.gstin||"-"))||"-"}<br>${K.pos}: ${esc(stName(g.pos)||"-")}</div><table><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc %</th><th>Taxable</th><th>GST</th><th>Total</th></tr>${rows}</table><table style="width:300px;margin-left:auto">${+rec.invDisc>0&&rec.discMode==="pre"?`<tr><td>Invoice Discount (before GST)</td><td class="r">-${n2(rec.invDisc)}</td></tr>`:""}<tr><td>Taxable Value</td><td class="r">${n2(g.tv)}</td></tr>${g.intra?`<tr><td>CGST</td><td class="r">${n2(g.cg)}</td></tr><tr><td>SGST</td><td class="r">${n2(g.sg)}</td></tr>`:`<tr><td>IGST</td><td class="r">${n2(g.ig)}</td></tr>`}${+rec.postDisc>0?`<tr><td>Less: Invoice Discount</td><td class="r">-${n2(rec.postDisc)}</td></tr>`:""}<tr><td>Round Off</td><td class="r">${n2(rd)}</td></tr><tr><td><b>Grand Total</b></td><td class="r"><b>₹${n2(gt)}</b></td></tr></table>${rec.remark?`<p><b>Narration:</b> ${esc(rec.remark)}</p>`:""}</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 const salePrintId=id=>{const x=DB[cur].find(s=>s.id===id);if(x)salePrint(x,cur)};
@@ -800,7 +801,7 @@ function renderSale(){
  <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfNewItem()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
  <datalist id="dl_items">${DB.item.map(i=>`<option value="${esc(i.name)}"></option>`).join("")}</datalist>
  <div class="sbot"><div class="sc" style="margin:0"><div class="sb"><label>Narration / Remarks</label><textarea rows="4" placeholder="Optional invoice narration..." oninput="sfSet('remark',this.value)">${esc(f.remark)}</textarea><div class="btns" style="justify-content:flex-start;margin-top:22px"><button class="ol" onclick="sfClear()">Clear</button><button class="ol" onclick="salePrintForm()">🖨 Print / Export</button><button class="isave" onclick="saleSave()">${SAVEICO} Save Invoice (F2)</button></div></div></div>
- <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()"><b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b></span></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
+ <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()"><b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b></span></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}${m.post?`<div><span>Less: Invoice Discount</span><b id="t_pd">−${R0(m.idPost)}</b></div>`:""}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
 }
 ["sale","purchase","salereturn","purchasereturn"].forEach(k=>{R[k+"register"].f=function(){
  const l=DB[k].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
