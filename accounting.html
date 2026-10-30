@@ -403,16 +403,24 @@ function edocBuild(kind){
 }
 function edocDl(kind){const r=edocBuild(kind);if(r)dl((kind==="einv"?"einvoice_":"ewaybill_")+r.no+".json",JSON.stringify(r.j,null,2),"application/json")}
 function edocCp(kind){const r=edocBuild(kind);if(r)cpTxt(JSON.stringify(r.j,null,2))}
+async function einvoiceBill(id){
+ RS.es=id;RS.api.act="gen";const check=edocBuild("einv");
+ if(check&&check.iss.length){render();alert("Please complete the selected bill details first:\n\n"+check.iss.join("\n"));return;}
+ RS.api.body=JSON.stringify(apiTpl("einv","gen"),null,2);render();await apiSend("einv",0);
+}
 function edocPage0(kind,live){
  if(!DB.sale.length)return '<div class="empty">Create a Sale Entry first</div>';
  const x0=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];RS.es=x0.id;
  const E=RS.ew,inp=(k,l,w)=>`<div style="min-width:${w||140}px"><label>${l}</label><input value="${esc(E[k])}" onchange="RS.ew.${k}=this.value;render()"></div>`;
- const ctl=`<div class="ctl"><div style="min-width:260px"><label>Sale Entry</label><select onchange="RS.es=this.value;render()">${DB.sale.map(s=>`<option value="${s.id}" ${s.id===RS.es?"selected":""}>${esc(docNo("sale",s))} • ${s.date} • ${esc(lookup("party",s.party))} • ₹${n2(s.amount)}</option>`).join("")}</select></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
+ const bills=`<div style="margin:0 14px 14px;padding:14px;border:1px solid #d8def0;border-radius:10px;background:#fff">
+ <b style="font-size:16px">${kind==="einv"?"Select Sale Bill for E-Invoice":"Select Sale Bill for E-Way Bill"}</b>
+ <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='gen';render()">${s.id===RS.es?"Selected":"Select"}</button> ${kind==="einv"&&!live?`<button onclick="einvoiceBill('${s.id}')">Generate E-Invoice</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`;
+ const ctl=`<div class="ctl"><div style="min-width:260px"><label>Selected Sale Entry</label><input readonly value="${esc(docNo("sale",x0))} • ${esc(lookup("party",x0.party))} • ₹${n2(x0.amount)}"></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
  const r=edocBuild(kind),url=PORT[kind][live?"live":"sand"],nm=kind==="einv"?"E-Invoice":"E-Way Bill";
  const warn=r.iss.length?`<div style="margin:0 14px;padding:10px 14px;background:#fff4de;border-radius:8px;font-size:13px"><b>Please fill in / check these details:</b><br>• ${r.iss.map(esc).join("<br>• ")}</div>`:`<div style="margin:0 14px;padding:10px 14px;background:#e3f7ec;border-radius:8px;font-size:13px">✔ All required details are present</div>`;
- const info=live?`<b>Live (Production):</b> This is the real ${nm}. Generate the JSON and upload it to the official portal or to your GSP. It is better to test in Sandbox first.`:`<b>Sandbox (Testing):</b> For testing only. Sandbox works through the API and needs registration. Use the JSON on this page for testing.`;
- return ctl+warn+`<div style="padding:12px 14px;font-size:13px;color:#475069">${info}<br><span style="color:#b26a00">This file does not generate an IRN / E-Way Bill number by itself. That needs GSP / API credentials and a server, which a single HTML file cannot provide.</span></div>
- <pre style="margin:0 14px 14px;padding:14px;background:#0f1a3a;color:#cfe1ff;border-radius:8px;font-size:12px;max-height:340px;overflow:auto">${esc(JSON.stringify(r.j,null,2))}</pre>
+ const info=live?`<b>Live (Production):</b> This is the real ${nm}. Verify all details before sending.`:`<b>Sandbox (Testing):</b> This sends the selected bill to the Webtel Sandbox API using the configured credentials.`;
+ return bills+ctl+warn+`<div style="padding:12px 14px;font-size:13px;color:#475069">${info}</div>
+ <pre style="margin:0 14px 14px;padding:14px;background:#0f1a3a;color:#cfe1ff;border-radius:8px;font-size:12px;max-height:260px;overflow:auto">${esc(JSON.stringify(r.j,null,2))}</pre>
  <div class="ctl" style="padding-top:0"><button onclick="edocDl('${kind}')">⬇ Download JSON</button><button class="g" onclick="edocCp('${kind}')">Copy JSON</button><button class="e" onclick="window.open('${url}','_blank')">Open ${live?"Live":"Sandbox"} Portal</button></div>`;
 }
 R.einvsand={t:"E-Invoice Sandbox",f:()=>edocPage("einv",0)};
@@ -527,6 +535,7 @@ function bkpSchema(f){
  rd.readAsText(f);
 }
 /* ===== Backup page + folder auto-backup ===== */
+const ld=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 const bkJson=()=>JSON.stringify({app:"acc",v:1,exportedAt:new Date().toISOString(),db:{...DB,settings:{...DB.settings,api:undefined}}},null,2);
 const BK={h:null,state:"none",last:"",name:""};
 const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open("accbk",1);r.onupgradeneeded=()=>r.result.createObjectStore("h");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
@@ -540,7 +549,7 @@ async function bkInit(){
 }
 async function bkWrite(){
  if(!BK.h||BK.state!=="ready")return false;
- try{const fh=await BK.h.getFileHandle("accounts_backup_latest.json",{create:true}),w=await fh.createWritable();await w.write(bkJson());await w.close();
+ try{const js=bkJson();for(const nm of ["accounts_backup_latest.json","accounts_backup_"+ld()+".json"]){const fh=await BK.h.getFileHandle(nm,{create:true}),w=await fh.createWritable();await w.write(js);await w.close()}
   BK.last=new Date().toLocaleString("en-IN");try{localStorage.setItem("acc_bk_last",BK.last)}catch(e){}return true}
  catch(e){BK.state="need";return false}
 }
@@ -556,7 +565,86 @@ async function bkReconnect(){
 }
 async function bkNow(){const ok=await bkWrite();if(ok)toast("Backup saved in folder: "+BK.name);else alert("Backup failed. Please reconnect the folder.");render()}
 let bkTimer;
-function bkAuto(){if(BK.state!=="ready")return;clearTimeout(bkTimer);bkTimer=setTimeout(async()=>{await bkWrite();if(cur==="backup")render()},1200)}
+function bkAuto(){if(BK.state!=="ready"&&GD.state!=="ready")return;clearTimeout(bkTimer);bkTimer=setTimeout(async()=>{if(BK.state==="ready")await bkWrite();if(GD.state==="ready")await gdBackup();if(cur==="backup")render()},1200)}
+/* ===== Google Drive backup (browser sign-in, drive.file scope) ===== */
+const GD={cid:"",tok:"",exp:0,state:"none",mail:"",last:"",err:"",tc:null,fid:"",fold:"",warned:0};
+try{GD.cid=localStorage.getItem("acc_gd_cid")||"";GD.last=localStorage.getItem("acc_gd_last")||"";GD.fid=localStorage.getItem("acc_gd_file")||"";GD.fold=localStorage.getItem("acc_gd_folder")||""}catch(e){}
+GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+function gdSetCid(v){GD.cid=v.trim();lsSet("acc_gd_cid",GD.cid);GD.tok="";GD.tc=null;GD.fid="";GD.fold="";lsSet("acc_gd_file","");lsSet("acc_gd_folder","");GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";render()}
+const gdLoad=()=>new Promise((res,rej)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return res();const t=document.createElement("script");t.src="https://accounts.google.com/gsi/client";t.onload=()=>res();t.onerror=()=>rej(new Error("Could not load Google sign-in. Please check your internet connection."));document.head.appendChild(t)});
+async function gdApi(url,o){
+ o=o||{};const r=await fetch(url,{...o,headers:{Authorization:"Bearer "+GD.tok,...(o.headers||{})}});
+ if(r.status===401){GD.state="expired";throw new Error("expired")}
+ if(!r.ok)throw new Error("Drive error "+r.status);
+ return r.status===204?{}:r.json();
+}
+async function gdConnect(){
+ if(!GD.cid){alert("Enter your Google Client ID first");return}
+ try{await gdLoad()}catch(e){alert(e.message);return}
+ GD.tc=google.accounts.oauth2.initTokenClient({client_id:GD.cid,scope:"https://www.googleapis.com/auth/drive.file",
+  callback:async r=>{
+   if(r.error){GD.state=GD.tok?"expired":"error";GD.err=r.error_description||r.error;if(cur==="backup")render();return}
+   GD.tok=r.access_token;GD.exp=Date.now()+((+r.expires_in||3600)-120)*1000;GD.state="ready";GD.err="";GD.warned=0;
+   try{const a=await gdApi("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)");GD.mail=a.user.emailAddress}catch(e){}
+   await gdBackup();if(cur==="backup")render()},
+  error_callback:e=>{GD.state=GD.tok?"expired":"none";GD.err=(e&&e.type)||"Sign-in was cancelled";if(cur==="backup")render()}});
+ GD.tc.requestAccessToken({prompt:""});
+}
+async function gdFolder(){
+ if(GD.fold)return GD.fold;
+ const q=encodeURIComponent("name='Accounts Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+ const l=await gdApi("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id)");
+ let id=l.files&&l.files[0]&&l.files[0].id;
+ if(!id){const c=await gdApi("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"Accounts Backup",mimeType:"application/vnd.google-apps.folder"})});id=c.id}
+ GD.fold=id;lsSet("acc_gd_folder",id);return id;
+}
+async function gdUpload(){
+ const folder=await gdFolder(),body=bkJson(),up="https://www.googleapis.com/upload/drive/v3/files/";
+ if(GD.fid){try{await gdApi(up+GD.fid+"?uploadType=media",{method:"PATCH",headers:{"Content-Type":"application/json"},body});await gdDaily(folder,body);return}catch(e){if(!/404/.test(e.message))throw e;GD.fid=""}}
+ const q=encodeURIComponent("name='accounts_backup_latest.json' and '"+folder+"' in parents and trashed=false");
+ const l=await gdApi("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id)");
+ let id=l.files&&l.files[0]&&l.files[0].id;
+ if(id)await gdApi(up+id+"?uploadType=media",{method:"PATCH",headers:{"Content-Type":"application/json"},body});
+ else{const bd="bkp"+Date.now(),mp=`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name:"accounts_backup_latest.json",parents:[folder],mimeType:"application/json"})}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
+  const c=await gdApi(up.replace("/files/","/files")+"?uploadType=multipart&fields=id",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+bd},body:mp});id=c.id}
+ GD.fid=id;lsSet("acc_gd_file",id);
+ await gdDaily(folder,body);
+}
+async function gdDaily(folder,body){
+ const name="accounts_backup_"+ld()+".json",up="https://www.googleapis.com/upload/drive/v3/files/",hd={method:"PATCH",headers:{"Content-Type":"application/json"},body};
+ if(GD.day&&GD.day.n===name){try{await gdApi(up+GD.day.i+"?uploadType=media",hd);return}catch(e){if(!/404/.test(e.message))throw e}}
+ const q=encodeURIComponent("name='"+name+"' and '"+folder+"' in parents and trashed=false");
+ const l=await gdApi("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id)");
+ let id=l.files&&l.files[0]&&l.files[0].id;
+ if(id)await gdApi(up+id+"?uploadType=media",hd);
+ else{const bd="bkd"+Date.now(),mp=`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name,parents:[folder],mimeType:"application/json"})}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
+  const c=await gdApi("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+bd},body:mp});id=c.id}
+ GD.day={n:name,i:id};
+}
+async function gdBackup(){
+ if(!GD.tok)return false;
+ if(Date.now()>GD.exp){GD.state="expired";if(!GD.warned){GD.warned=1;toast("Google Drive session expired. Open Data Backup & Restore and click Reconnect Drive.")}return false}
+ try{await gdUpload();GD.last=new Date().toLocaleString("en-IN");lsSet("acc_gd_last",GD.last);GD.state="ready";GD.err="";return true}
+ catch(e){if(GD.state!=="expired")GD.err=e.message;else if(!GD.warned){GD.warned=1;toast("Google Drive session expired. Open Data Backup & Restore and click Reconnect Drive.")}return false}
+}
+async function gdNow(){const ok=await gdBackup();if(ok)toast("Backup saved to Google Drive");else alert(GD.state==="expired"?"Your Google session expired. Click Reconnect Drive.":"Backup failed: "+(GD.err||"unknown error"));render()}
+function gdDisconnect(){try{if(GD.tok&&window.google)google.accounts.oauth2.revoke(GD.tok)}catch(e){}GD.tok="";GD.mail="";GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";render()}
+async function bkTick(){if(BK.state==="ready")await bkWrite();if(GD.tok)await gdBackup();if(cur==="backup")render()}
+setInterval(bkTick,10*60*1000);
+function gdCardHtml(){
+ const st=GD.state,ready=st==="ready";
+ const box=ready?`<div class="bst ok">● Connected • Instant backup active</div><div class="bnote">Google account: <b>${esc(GD.mail||"-")}</b><br>Drive folder: <b>Accounts Backup</b></div>`
+  :st==="insecure"?`<div class="bst wn">Google sign-in does not work when this file is opened directly from your computer (file://). Open it from http://localhost or an https address.</div>`
+  :st==="expired"?`<div class="bst wn">● Session expired. Click Reconnect Drive.</div>`
+  :st==="nocid"?`<div class="bst no">● Not connected. Enter your Google Client ID below.</div>`
+  :st==="error"?`<div class="bst wn">● Could not connect: ${esc(GD.err)}</div>`:`<div class="bst no">● Not connected</div>`;
+ const canConnect=GD.cid&&st!=="insecure";
+ return `<div class="bcard"><div class="bico" style="background:#e7f0ff;color:#1a73e8">${SVGI(IC_UP)}</div><h3>Google Drive Instant Backup</h3><p>Every time you save an entry, and every 10 minutes, the backup file in your Google Drive folder is updated automatically. A separate copy for each day is also kept.</p>${box}${GD.last?`<div class="bnote">Last backup: ${esc(GD.last)}</div>`:""}
+ <label style="margin-top:12px">Google OAuth Client ID</label><input value="${esc(GD.cid)}" placeholder="1234567890-abc.apps.googleusercontent.com" onchange="gdSetCid(this.value)" style="font-size:12px">
+ <details style="margin-top:8px;font-size:12px;color:#5b6784;line-height:1.7"><summary style="cursor:pointer;color:#3d5afe;font-weight:600">How to get a Client ID</summary><ol style="margin:6px 0 0 16px;padding:0"><li>Open console.cloud.google.com and create a project.</li><li>APIs &amp; Services → Library → enable "Google Drive API".</li><li>OAuth consent screen → External → add your Gmail address as a test user.</li><li>Credentials → Create credentials → OAuth client ID → Web application.</li><li>Under "Authorized JavaScript origins" add the address where you open this app (for example http://localhost:8080).</li><li>Copy the Client ID and paste it above.</li></ol></details>
+ <div class="bfoot"><button style="background:#2f4fd8" ${canConnect?"":"disabled"} onclick="gdConnect()">${SVGI(IC_UP2,16)} ${st==="ready"?"Reconnect Drive":st==="expired"?"Reconnect Drive":"Connect Drive"}</button><button class="ol" ${ready?"":"disabled"} onclick="gdNow()">${SVGI(IC_FILE,16)} Backup Now</button></div>${ready?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="gdDisconnect()">Disconnect</a>`:""}</div>`;
+}
 RS.bkFile=null;
 function bkPick(f){RS.bkFile=f||null;render()}
 function bkRestore(){const f=RS.bkFile;if(!f)return;RS.bkFile=null;bkpLoad(f)}
@@ -571,7 +659,8 @@ R.backup={t:"Data Backup & Restore",f(){
  const f=RS.bkFile;
  return `<div class="sc"><div class="hd2" style="padding:20px 24px"><div class="hico" style="color:#3d5afe">${SVGI(IC_FILE,24)}</div><div style="flex:1"><b style="font-size:19px">Data Backup &amp; Restore</b><div style="font-size:14px;color:#5b6784;margin-top:4px">Keep your backup file safe before uninstalling the software or changing your PC.</div></div><span class="bdg a" style="font-size:12px;padding:8px 14px">API credentials excluded</span></div></div>
  <div class="bk3">
- <div class="bcard"><div class="bico" style="background:#fff0d9;color:#d98300">${SVGI(IC_UP)}</div><h3>Folder Instant Backup</h3><p>Every time you save an entry, the latest backup file in your chosen folder is updated automatically. Choose a Google Drive or OneDrive synced folder to keep a cloud copy.</p>${box}${BK.last?`<div class="bnote">Last backup: ${esc(BK.last)}</div>`:""}<div class="bfoot"><button style="background:#2f4fd8" ${st==="unsupported"?"disabled":""} onclick="${st==="need"?"bkReconnect()":"bkChoose()"}">${SVGI(IC_UP2,16)} ${st==="need"?"Reconnect Folder":st==="ready"?"Change Folder":"Choose Folder"}</button><button class="ol" ${ready?"":"disabled"} onclick="bkNow()">${SVGI(IC_FILE,16)} Backup Now</button></div></div>
+ ${gdCardHtml()}
+ <div class="bcard"><div class="bico" style="background:#fff0d9;color:#d98300">${SVGI(IC_UP)}</div><h3>Folder Instant Backup</h3><p>Every time you save an entry, and every 10 minutes, the backup file in your chosen folder is updated automatically. A separate copy for each day is also kept. Choose a Google Drive or OneDrive synced folder to keep a cloud copy.</p>${box}${BK.last?`<div class="bnote">Last backup: ${esc(BK.last)}</div>`:""}<div class="bfoot"><button style="background:#2f4fd8" ${st==="unsupported"?"disabled":""} onclick="${st==="need"?"bkReconnect()":"bkChoose()"}">${SVGI(IC_UP2,16)} ${st==="need"?"Reconnect Folder":st==="ready"?"Change Folder":"Choose Folder"}</button><button class="ol" ${ready?"":"disabled"} onclick="bkNow()">${SVGI(IC_FILE,16)} Backup Now</button></div></div>
  <div class="bcard"><div class="bico" style="background:#e8edff;color:#3d5afe">${SVGI(IC_FILE)}</div><h3>Create Backup</h3><p>Download all companies, masters, invoices, returns, vouchers, ledgers and software settings in one file.</p><div class="bfoot"><button style="background:#2f4fd8;flex:0 1 auto" onclick="bkpDl()">${SVGI(IC_FILE,16)} Create &amp; Download Backup</button></div></div>
  <div class="bcard"><div class="bico" style="background:#e3f7ec;color:#14803c">${SVGI(IC_UP2)}</div><h3>Restore Backup</h3><p>After reinstalling, choose your saved backup file. Existing accounting data is replaced after you confirm. An ownfuturebright backup file imports its companies.</p>${f?`<div class="bnote" style="margin-top:12px">Selected file: <b>${esc(f.name)}</b></div>`:""}<div class="bfoot" style="flex-direction:column"><input id="bkfile" type="file" accept=".json,application/json" style="display:none" onchange="bkPick(this.files[0])"><button class="ol" onclick="document.getElementById('bkfile').click()">${SVGI(IC_UP2,16)} Choose Backup File</button><button style="background:#2f4fd8" ${f?"":"disabled"} onclick="bkRestore()">${SVGI(IC_FILE,16)} Restore Now</button></div></div>
  </div>
