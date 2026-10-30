@@ -109,6 +109,8 @@ nav .top1.on{background:#3d5afe;color:#fff}
 .bst.ok{background:#e8f7ee;color:#14803c}.bst.no{background:#f1f3f8;color:#6b7690}.bst.wn{background:#fff4de;color:#b26a00}
 button:disabled{opacity:.5;cursor:not-allowed}
 .bnote{font-size:12px;color:#6b7690;margin-top:4px}
+.kp{cursor:pointer;transition:box-shadow .15s,transform .15s}
+.kp:hover{box-shadow:0 4px 14px #0002;transform:translateY(-1px)}
 main{flex:1;padding:20px;overflow:auto;min-width:0}
 .bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .bar h1{margin:0;font-size:22px;flex:1}
@@ -183,7 +185,19 @@ const _d=new Date(),FY0=_d.getMonth()>=3?_d.getFullYear():_d.getFullYear()-1;
 const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:""};
 const fyl=y=>y+"-"+String(y+1).slice(2);
 const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
-function go(k){cur=k;RS.sf=null;render();openForm()}
+const TG=["saleregister","purchaseregister","receiptregister","recv","pay"];
+function dashGo(i){
+ const k=TG[i];
+ if(k!=="recv"&&k!=="pay"){RS.from=RS.fy+"-04-01";RS.to=(RS.fy+1)+"-03-31"}
+ RS.back=null;cur=k;render();
+}
+function ledgerOf(id){RS.party=id;RS.from="";RS.to="";cur="ledger";render()}
+const act=(k,id)=>`<button class="e" style="padding:3px 9px" onclick="regEdit('${k}','${id}')">Edit</button> <button class="d" style="padding:3px 9px" onclick="regDel('${k}','${id}')">Delete</button>`;
+function regEdit(k,id){if(KC[k])regOpen(k,id);else recOpen(k,id)}
+function regDel(k,id){if(!confirm("Are you sure you want to delete this entry?"))return;DB[k]=DB[k].filter(x=>x.id!==id);save();render()}
+function regOpen(k,id){RS.back=KC[cur]?null:cur;cur=k;RS.sf=null;openSale(id)}
+function recOpen(k,id){RS.ret=cur;RS.newParty=null;RS.newItem=null;cur=k;render();openForm(id)}
+function go(k){cur=k;RS.sf=null;RS.back=null;render();openForm()}
 function renderTop(){
  const cs=DB.company,c=cs.find(x=>x.id===RS.company)||cs[0];
  let fy="";for(let y=FY0-3;y<=FY0+1;y++)fy+=`<option value="${y}" ${y===RS.fy?"selected":""}>${fyl(y)}</option>`;
@@ -195,8 +209,8 @@ const stockQty=i=>{let q=+i.openq||0;const s=k=>DB[k].reduce((a,x)=>a+lines(x).f
  DB.stock.filter(x=>x.item===i.id).forEach(x=>q+=(x.type==="In"?1:-1)*(+x.qty||0));return q};
 const LED={sale:"dr",salereturn:"cr",purchase:"cr",purchasereturn:"dr",payment:"dr",receipt:"cr"};
 function entries(pid){const e=[];
- for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?+x.amount||0:0,cr:LED[k]==="cr"?+x.amount||0:0}));
- DB.journal.forEach(x=>{if(x.dr===pid)e.push({date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
+ for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?+x.amount||0:0,cr:LED[k]==="cr"?+x.amount||0:0}));
+ DB.journal.forEach(x=>{if(x.dr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
 const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
@@ -205,17 +219,17 @@ const isBank=x=>(x.mode||"Cash")!=="Cash";
 
 function book(title,pick){
  const l=[];
- DB.receipt.filter(pick).forEach(x=>l.push({d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
- DB.payment.filter(pick).forEach(x=>l.push({d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
+ DB.receipt.filter(pick).forEach(x=>l.push({k:"receipt",id:x.id,d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
+ DB.payment.filter(pick).forEach(x=>l.push({k:"payment",id:x.id,d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
  l.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
  let b=0,ti=0,to=0;
- const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b)]});
- return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
+ const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b),act(x.k,x.id)]});
+ return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
 }
 function outst(recv){
  const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>recv?b>0:b<0);
  const t=l.reduce((a,[p,b])=>a+Math.abs(b),0);
- return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+ return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
 }
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
@@ -230,18 +244,18 @@ const R={
   const mx=Math.max(...mv,1);
   const K=[["Total Sales",fy("sale"),"FY "+L,"₹","#e8edff","#3d5afe"],["Total Purchase",fy("purchase"),"FY "+L,"₹","#fff0d9","#e08a00"],["Total Receipt",fy("receipt"),"FY "+L,"₹","#efe9ff","#6a4cd9"],["Amount Receivable",rc,"Closing Dr","₹","#e1f6ea","#14803c"],["Payable",pb,"Closing Cr","₹","#ffe6e6","#e53935"]];
   const Q=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","party","item"];
-  return `<div class="kpis">${K.map(k=>`<div class="kp"><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
+  return `<div class="kpis">${K.map((k,i)=>`<div class="kp" onclick="dashGo(${i})" title="Click to see all transactions"><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
   <div class="dash2"><div class="pan"><b>Sales Overview</b><small>FY ${L} • Monthly sale value</small><div class="chart">${mv.map((v,i)=>`<div class="bc"><div class="bar2 ${v?"":"z"}" style="height:${v?Math.max(6,v/mx*88):3}%" title="${nm[i]}: ${inr(v)}"></div>${nm[i]}</div>`).join("")}</div><div class="fys">FY Sales: <b>${inr(fy("sale"))}</b></div></div>
   <div class="pan"><b>Quick Actions</b><small>Transactions, masters and reports</small><div class="qa">${Q.map(k=>`<div class="qt" onclick="go('${k}')"><span>${ICON[k]}</span>${T(k)}<b>+</b></div>`).join("")}</div></div></div>`}},
  daybook:{t:"Day Book",f(){
   const r=[];
-  ["sale","purchase","salereturn","purchasereturn"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(lineSum(x)),n2(x.amount)])));
-  ["receipt","payment"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount)])));
-  DB.journal.filter(x=>x.date===RS.date).forEach(x=>r.push(["Journal Voucher",esc(lookup("party",x.dr))+" → "+esc(lookup("party",x.cr)),esc(x.remark||""),n2(x.amount)]));
-  return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Party","Details","Amount"],r,r.length+" entries")}},
+  ["sale","purchase","salereturn","purchasereturn"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(lineSum(x)),n2(x.amount),act(k,x.id)])));
+  ["receipt","payment"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),act(k,x.id)])));
+  DB.journal.filter(x=>x.date===RS.date).forEach(x=>r.push(["Journal Voucher",esc(lookup("party",x.dr))+" → "+esc(lookup("party",x.cr)),esc(x.remark||""),n2(x.amount),act("journal",x.id)]));
+  return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Party","Details","Amount","Action"],r,r.length+" entries")}},
  cashbook:{t:"Cash Book",f:()=>book("Cash",x=>!isBank(x))},
  bankbook:{t:"Bank Book",f:()=>book("Bank",isBank)},
- journalbook:{t:"Journal Book",f:()=>tbl(["Date","Debit A/c","Credit A/c","Amount","Narration"],DB.journal.slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(lookup("party",x.dr)),esc(lookup("party",x.cr)),n2(x.amount),esc(x.remark||"")]))},
+ journalbook:{t:"Journal Book",f:()=>tbl(["Date","Debit A/c","Credit A/c","Amount","Narration","Action"],DB.journal.slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(lookup("party",x.dr)),esc(lookup("party",x.cr)),n2(x.amount),esc(x.remark||""),act("journal",x.id)]))},
  recv:{t:"Outstanding – Receivable",f:()=>outst(1)},
  pay:{t:"Outstanding – Payable",f:()=>outst(0)},
  trading:{t:"Trading Account",f(){
@@ -256,10 +270,10 @@ const R={
   const p=DB.party.find(x=>x.id===RS.party);if(!p)return ctl+'<div class="empty">Select a party</div>';
   let b=+p.opening||0;const e=entries(p.id),rows=[];
   e.filter(x=>RS.from&&x.date<RS.from).forEach(x=>b+=x.dr-x.cr);
-  rows.push(["","<i>Opening Balance</i>","","","",dc(b)]);
+  rows.push(["","<i>Opening Balance</i>","","","",dc(b),""]);
   let td=0,tc=0;
-  e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.remark),n2(x.dr),n2(x.cr),dc(b)])});
-  return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
+  e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.remark),n2(x.dr),n2(x.cr),dc(b),act(x.k,x.id)])});
+  return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance","Action"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
  stockstatus:{t:"Stock Status",f(){
   const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
   const all=DB.item.map(i=>{const q=stockQty(i);return {i,q,s:q<=0?"out":q<=lim(i)?"low":"ok"}});
@@ -280,8 +294,8 @@ Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx;
   const l=DB[mk].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
   const ctl=`<div class="ctl">${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
   const tot=l.reduce((a,x)=>a+(+x.amount||0),0);
-  const rows=l.map((x,i)=>isT?[i+1,x.date,esc(lookup("party",x.party)),esc(lookup("item",x.item)),x.qty,n2(x.rate),n2(x.amount),esc(x.remark||"")]:[i+1,x.date,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),esc(x.remark||"")]);
-  const h=isT?["#","Date","Party","Item","Qty","Rate","Amount","Remark"]:["#","Date","Party","Mode","Amount","Remark"];
+  const rows=l.map((x,i)=>isT?[i+1,x.date,esc(lookup("party",x.party)),esc(lookup("item",x.item)),x.qty,n2(x.rate),n2(x.amount),esc(x.remark||"")]:[i+1,`<a class="lnk" style="font-size:13px" onclick="recOpen('${mk}','${x.id}')" title="Open this entry">${x.date}</a>`,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),esc(x.remark||""),act(mk,x.id)]);
+  const h=isT?["#","Date","Party","Item","Qty","Rate","Amount","Remark"]:["#","Date","Party","Mode","Amount","Remark","Action"];
   return ctl+tbl(h,rows,`Entries: ${l.length} &nbsp; Total: ₹ ${n2(tot)}`)}}});
 
 /* ===== Auto PO ===== */
@@ -695,7 +709,8 @@ function newSaleForm(){const c=comp();return {kind:cur,id:"",no:invAuto(cur)?inv
 function saleFromRec(x){
  const pt=DB.party.find(p=>p.id===x.party)||{};let no=x.invNo||x.inv||"";
  if(!x.invNo&&invAuto(cur)){const d=invSaved(cur);if(no.startsWith(d.prefix)&&no.endsWith(d.suffix)&&no.length>=d.prefix.length+d.suffix.length)no=no.slice(d.prefix.length,no.length-d.suffix.length)}
- return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:x.discMode||"pre",
+ if(!no&&invAuto(cur))no=invNextNum(cur);
+ return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:(x.discMode&&+x.invDisc>0)?x.discMode:"post",
   items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
 function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.sf=x?saleFromRec(x):newSaleForm();render()}
@@ -708,7 +723,8 @@ function sfCompute(){
  let tv=0,dc=0,cg=0,sg=0,ig=0;
  const L=f.items.map((l,i)=>{const o0=pre[i],share=sub>0?idPre*o0.t0/sub:0,t=o0.t0-share,tx=t*(+l.gst||0)/100;
   const o={t,d:o0.d+share,cg:intra?tx/2:0,sg:intra?tx/2:0,ig:intra?0:tx,tot:t+tx};tv+=t;dc+=o.d;cg+=o.cg;sg+=o.sg;ig+=o.ig;return o});
- const gross=tv+cg+sg+ig,idPost=post?cap(gross):0,tot=gross-idPost,grand=Math.round(tot);
+ const rd2=v=>Math.round(v*100)/100;tv=rd2(tv);if(intra){const tx=rd2(cg+sg);cg=rd2(tx/2);sg=rd2(tx-cg)}else ig=rd2(ig);
+ const gross=tv+cg+sg+ig,idPost=post?rd2(cap(gross)):0,tot=gross-idPost,grand=Math.round(tot);
  return {L,sub,idisc:post?idPost:idPre,idPost,post,tv,dc:dc+idPost,cg,sg,ig,gross,tot,round:grand-tot,grand,intra};
 }
 function sfUpd(){
@@ -759,7 +775,7 @@ function saleSave(){
  const isNew=!f.id;
  if(isNew){rec.id=uid();DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]=rec}
  save();toast(M[cur].title+" "+rec.inv+" saved");
- RS.sf=isNew?newSaleForm():null;render();
+ RS.sf=isNew?newSaleForm():null;if(!isNew&&RS.back){cur=RS.back;RS.back=null}render();
 }
 function salePrint(rec,k){
  k=k||cur;const K=KC[k],c=comp(),pt=DB.party.find(p=>p.id===rec.party)||{},g=gstCalc(rec);
@@ -792,7 +808,7 @@ function renderSale(){
   return;
  }
  const m=sfCompute(),c=comp();
- $("add").style.display="";$("add").textContent="← Back to List";$("q").style.display="none";$("list").className="";
+ $("add").style.display="";$("add").textContent=RS.back?"← Back":"← Back to List";$("q").style.display="none";$("list").className="";
  $("extra").innerHTML=`<div style="font-size:12px;color:#6b7690;margin:-8px 0 10px">FY ${fyl(RS.fy)} • ${esc(stName(stc(c))||c.city||"-")}</div>`;
  const R0=v=>"₹"+n2(v);
  $("list").innerHTML=`<div class="sc"><div class="hd2"><div class="hico">🧾</div><div style="flex:1"><b style="font-size:17px">${K.head}</b><div style="font-size:11px;color:#6b7690;margin-top:2px">${esc(c.name||"No company selected")} • GSTIN: ${esc(c.gstin||"-")}</div></div><span class="bdg ${m.intra?"a":"w"}">${m.intra?"INTRA-STATE":"INTER-STATE"}</span></div>
@@ -801,15 +817,15 @@ function renderSale(){
  <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfNewItem()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
  <datalist id="dl_items">${DB.item.map(i=>`<option value="${esc(i.name)}"></option>`).join("")}</datalist>
  <div class="sbot"><div class="sc" style="margin:0"><div class="sb"><label>Narration / Remarks</label><textarea rows="4" placeholder="Optional invoice narration..." oninput="sfSet('remark',this.value)">${esc(f.remark)}</textarea><div class="btns" style="justify-content:flex-start;margin-top:22px"><button class="ol" onclick="sfClear()">Clear</button><button class="ol" onclick="salePrintForm()">🖨 Print / Export</button><button class="isave" onclick="saleSave()">${SAVEICO} Save Invoice (F2)</button></div></div></div>
- <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()"><b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b></span></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}${m.post?`<div><span>Less: Invoice Discount</span><b id="t_pd">−${R0(m.idPost)}</b></div>`:""}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
+ <div class="sc" style="margin:0"><div class="sb tp"><div><span>Sub Total</span><b id="t_sub">${R0(m.sub)}</b></div><div><span>Taxable Value</span><b id="t_tv">${R0(m.tv)}</b></div><div><span>Total Discount</span><b id="t_dc">${R0(m.dc)}</b></div>${m.intra?`<div><span>CGST</span><b id="t_cg">${R0(m.cg)}</b></div><div><span>SGST</span><b id="t_sg">${R0(m.sg)}</b></div>`:`<div><span>IGST</span><b id="t_ig">${R0(m.ig)}</b></div>`}<div><span>Round Off</span><b id="t_rd">${m.round>=0?"+":"−"}${R0(Math.abs(m.round))}</b></div><div><span>Invoice Discount</span><span style="display:flex;gap:6px;align-items:center"><select style="width:58px;padding:5px" onchange="sfSet('dtype',this.value);sfUpd()"><option value="pct" ${f.dtype!=="amt"?"selected":""}>%</option><option value="amt" ${f.dtype==="amt"?"selected":""}>₹</option></select><input type="number" min="0" step="any" style="width:84px;padding:5px 8px" value="${esc(f.dval)}" oninput="sfSet('dval',this.value);sfUpd()">${m.post?"":`<b id="t_id" style="min-width:76px;text-align:right">−${R0(m.idisc)}</b>`}</span></div>${m.post?`<div><span>Less: Invoice Discount</span><b id="t_pd">−${R0(m.idPost)}</b></div>`:""}<div class="gt"><span>Grand Total</span><b id="t_gt">${R0(m.grand)}</b></div></div></div></div>`;
 }
 ["sale","purchase","salereturn","purchasereturn"].forEach(k=>{R[k+"register"].f=function(){
  const l=DB[k].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
  const ctl=`<div class="ctl">${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
  let tv=0,tx=0,tt=0;
  const rows=l.map((x,i)=>{const g=gstCalc(x),t=x.taxable!==undefined?+x.amount:g.tot;tv+=g.tv;tx+=g.tax;tt+=t;
-  return [i+1,x.date,esc(x.inv||docNo(k,x)),esc(lookup("party",x.party)),esc(lineSum(x)),n2(g.tv),n2(g.tax),n2(t),esc(x.remark||"")]});
- return ctl+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration"],rows,`Entries: ${l.length} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
+  return [i+1,x.date,`<a class="lnk" style="font-size:13px" onclick="regOpen('${k}','${x.id}')" title="Open this entry">${esc(x.inv||docNo(k,x))}</a>`,esc(lookup("party",x.party)),esc(lineSum(x)),n2(g.tv),n2(g.tax),n2(t),esc(x.remark||""),act(k,x.id)]});
+ return ctl+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration","Action"],rows,`Entries: ${l.length} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
 
 let cur="dashboard",editId=null;
 const $=id=>document.getElementById(id);
@@ -819,7 +835,7 @@ function buildNav(){
  $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks])=>`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>").join("");
  $("nav").querySelectorAll(".gh").forEach(h=>h.onclick=()=>{OPEN[h.dataset.g]=!OPEN[h.dataset.g];buildNav()});
  $("nav").querySelectorAll("a[data-p]").forEach(a=>a.onclick=()=>{OPEN[a.dataset.p]=!OPEN[a.dataset.p];buildNav()});
- $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
+ $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.back=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
 }
 
 function stockSummary(){
@@ -924,7 +940,7 @@ function del(id){
  save();render();
 }
 
-$("add").onclick=()=>{if(KC[cur]&&RS.sf){RS.sf=null;render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
+$("add").onclick=()=>{if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
 document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}});
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
