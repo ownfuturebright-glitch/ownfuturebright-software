@@ -182,7 +182,7 @@ const val=(f,v)=>f.src?lookup(f.src,v):(v??"");
 const n2=v=>(+v||0).toFixed(2);
 const dc=v=>n2(Math.abs(v))+(v>=0?" Dr":" Cr");
 const _d=new Date(),FY0=_d.getMonth()>=3?_d.getFullYear():_d.getFullYear()-1;
-const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:""};
+const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:"",bookFY:FY0,bookPeriod:"Monthly",bookMonth:String(new Date().getMonth()+1)};
 const fyl=y=>y+"-"+String(y+1).slice(2);
 const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
 const TG=["saleregister","purchaseregister","receiptregister","recv","pay"];
@@ -217,14 +217,31 @@ const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>$
 const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="RS.${k}=this.value;render()"></div>`;
 const isBank=x=>(x.mode||"Cash")!=="Cash";
 
+function bookPeriodRange(){
+ const fy=+(RS.bookFY??RS.fy),m=+(RS.bookMonth||4),type=RS.bookPeriod||"Monthly";
+ let startMonth=m, startYear=fy+(m<=3?1:0), endMonth=m, endYear=startYear;
+ if(type==="Quarterly"){startMonth=4+Math.floor(((m>=4?m-4:m+8))/3)*3;startYear=fy+(startMonth>12?1:0);startMonth=((startMonth-1)%12)+1;endMonth=((startMonth+2-1)%12)+1;endYear=startYear+(endMonth<startMonth?1:0)}
+ else if(type==="Half Yearly"){const idx=m>=4?m-4:m+8;startMonth=idx<6?4:10;startYear=fy+(startMonth===10?0:0);endMonth=startMonth===4?9:3;endYear=startMonth===4?fy:fy+1}
+ else if(type==="Yearly"){return {from:fy+"-04-01",to:(fy+1)+"-03-31"}}
+ const last=new Date(endYear,endMonth,0).getDate();
+ return {from:startYear+"-"+String(startMonth).padStart(2,"0")+"-01",to:endYear+"-"+String(endMonth).padStart(2,"0")+"-"+String(last).padStart(2,"0")};
+}
+function bookPeriodControls(){
+ const fy=+(RS.bookFY??RS.fy),months=[4,5,6,7,8,9,10,11,12,1,2,3],names=["January","February","March","April","May","June","July","August","September","October","November","December"];
+ const mo=months.map(m=>{const y=m<=3?fy+1:fy;return `<option value="${m}" ${m===+(RS.bookMonth||4)?"selected":""}>${names[m-1]}</option>`}).join("");
+ const fys=Array.from({length:7},(_,i)=>FY0+2-i).map(y=>`<option value="${y}" ${y===fy?"selected":""}>${fyl(y)}</option>`).join("");
+ const range=bookPeriodRange();
+ return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 12px"><div><label>Period Type</label><select onchange="RS.bookPeriod=this.value;render()"><option ${RS.bookPeriod==="Monthly"?"selected":""}>Monthly</option><option ${RS.bookPeriod==="Quarterly"?"selected":""}>Quarterly</option><option ${RS.bookPeriod==="Half Yearly"?"selected":""}>Half Yearly</option><option ${RS.bookPeriod==="Yearly"?"selected":""}>Yearly</option></select></div><div><label>Month</label><select onchange="RS.bookMonth=this.value;render()">${mo}</select></div><div><label>Financial Year</label><select onchange="RS.bookFY=+this.value;render()">${fys}</select></div><div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(range.from)} to ${fd(range.to)}</b></div></div>`;
+}
+const inBookPeriod=x=>{const r=bookPeriodRange();return !!x.date&&x.date>=r.from&&x.date<=r.to};
 function book(title,pick){
  const l=[];
- DB.receipt.filter(pick).forEach(x=>l.push({k:"receipt",id:x.id,d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
- DB.payment.filter(pick).forEach(x=>l.push({k:"payment",id:x.id,d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
+ DB.receipt.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"receipt",id:x.id,d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
+ DB.payment.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"payment",id:x.id,d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
  l.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
  let b=0,ti=0,to=0;
  const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b),act(x.k,x.id)]});
- return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
+ return bookPeriodControls()+tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
 }
 function outst(recv){
  const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>recv?b>0:b<0);
@@ -255,7 +272,7 @@ const R={
   return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Party","Details","Amount","Action"],r,r.length+" entries")}},
  cashbook:{t:"Cash Book",f:()=>book("Cash",x=>!isBank(x))},
  bankbook:{t:"Bank Book",f:()=>book("Bank",isBank)},
- journalbook:{t:"Journal Book",f:()=>tbl(["Date","Debit A/c","Credit A/c","Amount","Narration","Action"],DB.journal.slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(lookup("party",x.dr)),esc(lookup("party",x.cr)),n2(x.amount),esc(x.remark||""),act("journal",x.id)]))},
+ journalbook:{t:"Journal Book",f:()=>bookPeriodControls()+tbl(["Date","Debit A/c","Credit A/c","Amount","Narration","Action"],DB.journal.filter(inBookPeriod).slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(lookup("party",x.dr)),esc(lookup("party",x.cr)),n2(x.amount),esc(x.remark||""),act("journal",x.id)]))},
  recv:{t:"Outstanding – Receivable",f:()=>outst(1)},
  pay:{t:"Outstanding – Payable",f:()=>outst(0)},
  trading:{t:"Trading Account",f(){
@@ -291,8 +308,8 @@ const R={
 const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
 Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx;
  R[rk]={t:M[mk].title.replace(" Entry","").replace(" Voucher","")+" Register",f(){
-  const l=DB[mk].filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
-  const ctl=`<div class="ctl">${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
+  const l=DB[mk].filter(inBookPeriod).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const ctl=bookPeriodControls();
   const tot=l.reduce((a,x)=>a+(+x.amount||0),0);
   const rows=l.map((x,i)=>isT?[i+1,x.date,esc(lookup("party",x.party)),esc(lookup("item",x.item)),x.qty,n2(x.rate),n2(x.amount),esc(x.remark||"")]:[i+1,`<a class="lnk" style="font-size:13px" onclick="recOpen('${mk}','${x.id}')" title="Open this entry">${x.date}</a>`,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),esc(x.remark||""),act(mk,x.id)]);
   const h=isT?["#","Date","Party","Item","Qty","Rate","Amount","Remark"]:["#","Date","Party","Mode","Amount","Remark","Action"];
