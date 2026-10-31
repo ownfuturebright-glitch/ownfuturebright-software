@@ -213,6 +213,20 @@ function entries(pid){const e=[];
  DB.journal.forEach(x=>{if(x.dr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
+function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
+function reportTable(){return document.querySelector('#list table')}
+function exportReportExcel(){
+ const t=reportTable();if(!t){alert('Export karne ke liye report table nahi mili.');return}
+ const rows=[...t.querySelectorAll('tr')].map(tr=>[...tr.children].filter((c,i)=>!(i===tr.children.length-1&&/Action/i.test(c.innerText))).map(c=>c.innerText.trim()));
+ const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const blob=new Blob([csv],{type:'application/vnd.ms-excel;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(R[cur]?.t||'Report').replace(/[^a-z0-9_-]/gi,'_')+'.xls';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function exportReportPDF(){
+ const t=reportTable();if(!t){alert('Export karne ke liye report table nahi mili.');return}
+ const title=R[cur]?.t||'Report';const w=window.open('','_blank');if(!w){alert('PDF ke liye popup allow karein.');return}
+ const clone=t.cloneNode(true);clone.querySelectorAll('tr').forEach(tr=>{const cells=[...tr.children];if(cells.length&&/Action/i.test(cells[cells.length-1].innerText))cells[cells.length-1].remove()});
+ w.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#e8ecf7} .tot{margin-top:10px;text-align:right;font-weight:bold}@media print{button{display:none}}</style></head><body><h2>'+title+'</h2>'+clone.outerHTML+'<script>window.onload=()=>{window.print()}<\/script></body></html>');w.document.close();
+}
 const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
 const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="RS.${k}=this.value;render()"></div>`;
 const isBank=x=>(x.mode||"Cash")!=="Cash";
@@ -966,7 +980,7 @@ function render(){
  if(!gated)RS.gateOk="";
  if(isR){$("ttl").textContent=R[cur].t;$("extra").innerHTML="";
   if(gated&&RS.gateOk!==cur){$("list").className="";$("list").innerHTML=gateHtml();setTimeout(()=>{const e=$("gpw");if(e&&e.focus)e.focus()},50)}
-  else $("list").innerHTML=R[cur].f();
+  else {const reportHtml=R[cur].f();$("list").innerHTML=reportHtml;$("extra").innerHTML=reportExportButtons();}
   return}
  if(KC[cur]){renderSale();return}
  const m=M[cur];
