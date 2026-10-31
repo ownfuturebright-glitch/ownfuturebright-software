@@ -201,7 +201,7 @@ function go(k){cur=k;RS.sf=null;RS.back=null;render();openForm()}
 function renderTop(){
  const cs=DB.company,c=cs.find(x=>x.id===RS.company)||cs[0];
  let fy="";for(let y=FY0-3;y<=FY0+1;y++)fy+=`<option value="${y}" ${y===RS.fy?"selected":""}>${fyl(y)}</option>`;
- $("top").innerHTML=`<div class="tc"><span class="ic">🏢</span><div><small>CURRENT COMPANY</small><select onchange="RS.company=this.value;render()">${cs.length?cs.map(x=>`<option value="${x.id}" ${c&&x.id===c.id?"selected":""}>${esc(x.name)}</option>`).join(""):"<option>Create a company</option>"}</select></div></div><div class="tc"><span class="ic">📅</span><div><small>FINANCIAL YEAR</small><select onchange="RS.fy=+this.value;render()">${fy}</select></div></div><span class="badge">✔ Saved in Browser</span><span class="av">${esc((c?c.name:"A").slice(0,2).toUpperCase())}</span>`;
+ $("top").innerHTML=`<div class="tc"><span class="ic">🏢</span><div><small>CURRENT COMPANY</small><select onchange="coPick(this.value)">${cs.length?cs.map(x=>`<option value="${x.id}" ${c&&x.id===c.id?"selected":""}>${esc(x.name)}</option>`).join(""):"<option>Create a company</option>"}</select></div></div><div class="tc"><span class="ic">📅</span><div><small>FINANCIAL YEAR</small><select onchange="RS.fy=+this.value;render()">${fy}</select></div></div><span class="badge">✔ Saved in Browser</span><span class="av">${esc((c?c.name:"A").slice(0,2).toUpperCase())}</span>`;
 }
 const sum=k=>DB[k].reduce((a,x)=>a+sv(x),0);
 const stockQty=i=>{let q=+i.openq||0;const s=k=>DB[k].reduce((a,x)=>a+lines(x).filter(l=>l.item===i.id).reduce((b,l)=>b+(+l.qty||0),0),0);
@@ -518,17 +518,159 @@ function edocPage(kind,live){RS.sbx=!live;return edocPage0(kind,live)+(DB.sale.l
 
 /* ===== Backup / Restore ===== */
 function bkpDl(){dl("accounts_backup_"+today()+".json",bkJson(),"application/json")}
+/* ===== Per-company data (each company keeps its own parties, items and vouchers) ===== */
+const CO_KEYS=Object.keys(M).filter(k=>k!=="company");
+function coStash(){
+ if(DB.activeCo===undefined)return;
+ DB.cd=DB.cd||{};DB.settings=DB.settings||{};
+ const s={};CO_KEYS.forEach(k=>{s[k]=DB[k]||[]});s.invp=DB.settings.invp||{};
+ DB.cd[DB.activeCo]=s;
+}
+function coLoad(id){
+ DB.cd=DB.cd||{};DB.settings=DB.settings||{};
+ const s=DB.cd[id]||{};
+ CO_KEYS.forEach(k=>{DB[k]=s[k]||[]});
+ DB.settings.invp=s.invp||{};
+ delete DB.cd[id];DB.activeCo=id;RS.company=id;
+}
+function coPick(id){
+ if(id===DB.activeCo)return;
+ coStash();coLoad(id);RS.sf=null;RS.back=null;save();render();
+}
+function coEnsure(){
+ if(DB.company.some(c=>c.id===DB.activeCo)){RS.company=DB.activeCo;return}
+ DB.activeCo=DB.company.length?DB.company[0].id:"";RS.company=DB.activeCo;
+}
+function coDel(id){
+ if(!confirm("Deleting a company also deletes all of its parties, items and vouchers. Are you sure?"))return;
+ DB.company=DB.company.filter(x=>x.id!==id);
+ if(DB.cd)delete DB.cd[id];
+ if(id===DB.activeCo){
+  CO_KEYS.forEach(k=>{DB[k]=[]});DB.settings=DB.settings||{};DB.settings.invp={};DB.activeCo=undefined;
+  if(DB.company.length)coLoad(DB.company[0].id);else{DB.activeCo="";RS.company=""}
+ }
+ save();render();
+}
+
+/* ===== ownfuturebright backup import ===== */
+const OFB_ST={"andaman and nicobar islands":"35","andhra pradesh":"37","arunachal pradesh":"12","assam":"18","bihar":"10","chandigarh":"04","chhattisgarh":"22","dadra and nagar haveli and daman and diu":"26","delhi":"07","goa":"30","gujarat":"24","haryana":"06","himachal pradesh":"02","jammu and kashmir":"01","jharkhand":"20","karnataka":"29","kerala":"32","ladakh":"38","lakshadweep":"31","madhya pradesh":"23","maharashtra":"27","manipur":"14","meghalaya":"17","mizoram":"15","nagaland":"13","odisha":"21","puducherry":"34","punjab":"03","rajasthan":"08","sikkim":"11","tamil nadu":"33","telangana":"36","tripura":"16","uttar pradesh":"09","uttarakhand":"05","west bengal":"19","other territory":"97","other country":"96"};
+const ofbCode=(state,gstin)=>{
+ const g=String(gstin||"").slice(0,2);if(/^\d{2}$/.test(g))return g;
+ const n=String(state||"").trim().toLowerCase();if(/^\d{2}$/.test(n))return n;
+ return OFB_ST[n]||"";
+};
+const ofbList=(st,k)=>{try{const v=JSON.parse(st[k]);return Array.isArray(v)?v:[]}catch(e){return[]}};
+const ofbFy=dt=>{const y=+String(dt||"").slice(0,4),m=+String(dt||"").slice(5,7);if(!y)return"";const a=m>=4?y:y-1;return a+"-"+String(a+1).slice(2)};
+const ofbUnit=u=>{u=String(u||"").trim();const m={PCS:"Pcs",NOS:"Nos",KGS:"Kg",KG:"Kg",GMS:"Gm",GM:"Gm",LTR:"Ltr",MTR:"Mtr",BOX:"Box",DOZ:"Dozen"}[u.toUpperCase()];return m||UNITS.find(x=>x.toLowerCase()===u.toLowerCase())||"Nos"};
+const ofbMode=a=>/bank|axis|hdfc|sbi|icici|upi|paytm|cheque|neft|rtgs/i.test(String(a||""))?"Bank":"Cash";
+const ofbRate=(t,x)=>{if(!(t>0))return 18;const p=x/t*100,o=[0,0.25,3,5,12,18,28];return o.reduce((a,b)=>Math.abs(b-p)<Math.abs(a-p)?b:a)};
+const OFB_PT={"Sundry Debtor":"Customer","Sundry Creditor":"Supplier","Both":"Both","Ledger":"Both"};
+const OFB_EDOC=["ewbNumber","ewbDate","ewbValidTill","ewbGstin","ewbEnvironment","ewbGeneratedAt","irn","ackNo","ackDate","signedQrCode","qrCodeImage","irnGstin","irnEnvironment","irnGeneratedAt"];
+
+function ofbCompany(st,c){
+ const cid=String(c.id),L=k=>ofbList(st,"vd-"+k+"-"+cid),cst=String(c.gstin||"").slice(0,2);
+ const D={party:[],item:[],stock:[],sale:[],purchase:[],salereturn:[],purchasereturn:[],po:[],receipt:[],payment:[],journal:[]};
+ const used=new Set(),mk=(p,id)=>{let v=p+id,n=0;while(used.has(v))v=p+id+"_"+(++n);used.add(v);return v};
+ const pm=new Map(),pe=new Map(),im=new Map(),ie=new Map(),ik=new Map(),mv={},srcItems=[];
+ let np=0,ni=0,made=0;
+ L("parties").forEach(p=>{
+  const id=mk("p",p.id);
+  D.party.push({id,name:String(p.name||"").trim(),type:OFB_PT[p.type]||"Both",phone:p.phone||"",city:"",gstin:p.gstin||"",addr:p.address||"",pin:p.pincode||"",stcode:ofbCode(p.state,p.gstin),opening:0});
+  const nm=String(p.name||"").trim(),k=nm.toLowerCase();if(!pe.has(nm))pe.set(nm,id);if(!pm.has(k))pm.set(k,id);
+ });
+ const partyOf=(name,gstin,state,type)=>{
+  const nm=String(name||"").trim(),k=nm.toLowerCase();
+  if(pe.has(nm))return pe.get(nm);
+  if(pm.has(k))return pm.get(k);
+  const id=mk("p","n"+(++np));made++;
+  D.party.push({id,name:nm,type,phone:"",city:"",gstin:gstin||"",addr:"",pin:"",stcode:ofbCode(state,gstin),opening:0});pe.set(nm,id);pm.set(k,id);return id;
+ };
+ L("items").forEach(i=>{
+  const id=mk("i",i.id),o={id,name:String(i.name||"").trim(),code:"",unit:ofbUnit(i.unit),srate:+i.saleRate||0,prate:+i.purchaseRate||0,openq:+i.openingStock||0,hsn:i.hsn||"",gst:+i.gst||0};
+  D.item.push(o);ik.set(String(i.id),id);const k=o.name.toLowerCase();if(!ie.has(o.name))ie.set(o.name,id);if(!im.has(k))im.set(k,id);srcItems.push([i,id]);
+ });
+ const itemOf=(l,sale)=>{
+  if(l.itemId!==undefined&&ik.has(String(l.itemId)))return ik.get(String(l.itemId));
+  const nm=String(l.item||"").trim(),k=nm.toLowerCase();if(ie.has(nm))return ie.get(nm);if(im.has(k))return im.get(k);
+  const id=mk("i","n"+(++ni));
+  D.item.push({id,name:nm,code:"",unit:ofbUnit(l.unit),srate:sale?(+l.rate||0):0,prate:sale?0:(+l.rate||0),openq:0,hsn:l.hsn||"",gst:+l.gst||0});ie.set(nm,id);im.set(k,id);return id;
+ };
+ const addInv=(kind,r)=>{
+  const sale=kind==="sale"||kind==="salereturn",sign=(kind==="purchase"||kind==="salereturn")?1:-1;
+  const pid=partyOf(r.party,r.gstin,r.pos,sale?"Customer":"Supplier"),pt=D.party.find(x=>x.id===pid)||{};
+  const pos=ofbCode(r.pos)||pt.stcode||"",intra=!!pos&&pos===cst;
+  const taxable=r2(r.taxable),tax=r2(r.tax),total=+r.total||0;
+  let items=(Array.isArray(r.lines)?r.lines:[]).filter(l=>(+l.qty||0)>0||(+l.rate||0)>0).map(l=>{
+   const disc=+l.discount||0,qty=+l.qty||0,rate=+l.rate||0,item=itemOf(l,sale),f=ofbFy(r.date);
+   if(f){const m=mv[item]=mv[item]||{};m[f]=(m[f]||0)+sign*qty}
+   return {item,hsn:l.hsn||"",unit:ofbUnit(l.unit),qty,rate,disc,gst:+l.gst||0,taxable:r2(qty*rate*(1-disc/100)),_g:qty*rate*disc/100};
+  });
+  if(!items.length)items=[{item:"",hsn:"",unit:"Nos",qty:1,rate:taxable,disc:0,gst:ofbRate(taxable,tax),taxable,_g:0}];
+  else{const diff=r2(taxable-items.reduce((a,l)=>a+l.taxable,0));if(diff)items[items.length-1].taxable=r2(items[items.length-1].taxable+diff)}
+  let dsc=0;
+  items.forEach(l=>{const tx=l.taxable*l.gst/100;l.cg=intra?r2(tx/2):0;l.sg=intra?r2(tx/2):0;l.ig=intra?0:r2(tx);l.total=r2(l.taxable+tx);dsc+=l._g;delete l._g});
+  const cg=intra?r2(tax/2):0,rec={id:mk(kind[0]+"_",r.id),inv:String(r.number||""),date:r.date,party:pid,gstin:r.gstin||"",pos,remark:"",items,discType:"pct",discVal:0,discMode:"post",invDisc:0,postDisc:0,subtotal:r2(taxable+dsc),taxable,discount:r2(dsc),cgst:cg,sgst:intra?r2(tax-cg):0,igst:intra?0:tax,round:r2(total-taxable-tax),amount:total};
+  if(r.numberCore!==undefined&&r.numberCore!==null)rec.invNo=String(r.numberCore);
+  OFB_EDOC.forEach(k=>{if(r[k]!==undefined&&r[k]!==null&&r[k]!=="")rec[k]=r[k]});
+  D[kind].push(rec);
+ };
+ L("sales").forEach(r=>addInv("sale",r));
+ L("purchases").forEach(r=>addInv("purchase",r));
+ L("sale-returns").forEach(r=>addInv("salereturn",r));
+ L("purchase-returns").forEach(r=>addInv("purchasereturn",r));
+ const addVou=(kind,r)=>{
+  const rec={id:mk(kind[0]+"v",r.id),date:r.date,party:partyOf(r.party,"","",kind==="receipt"?"Customer":"Supplier"),amount:+r.amount||0,mode:ofbMode(r.account),remark:[r.number,r.account,r.narration].filter(Boolean).join(" | "),number:r.number||"",account:r.account||""};
+  if(Array.isArray(r.allocations)&&r.allocations.length)rec.alloc=r.allocations.map(a=>({inv:a.invoiceNumber||"",amount:+a.amount||0}));
+  if(+r.tdsAmount)rec.tds=+r.tdsAmount;
+  D[kind].push(rec);
+ };
+ L("receipts").forEach(r=>addVou("receipt",r));
+ L("payments").forEach(r=>addVou("payment",r));
+ L("journals").forEach(j=>{
+  const dr=[],cr=[];
+  (j.lines||[]).forEach(l=>{if(+l.debit>0)dr.push({a:l.account,v:+l.debit});if(+l.credit>0)cr.push({a:l.account,v:+l.credit})});
+  let i=0,k=0,n=0;const rm=[j.number,j.narration].filter(Boolean).join(" | ");
+  while(i<dr.length&&k<cr.length){
+   const v=r2(Math.min(dr[i].v,cr[k].v));
+   D.journal.push({id:mk("j",j.id)+(n?"_"+n:""),date:j.date,dr:partyOf(dr[i].a,"","","Both"),cr:partyOf(cr[k].a,"","","Both"),amount:v,remark:rm});n++;
+   dr[i].v=r2(dr[i].v-v);cr[k].v=r2(cr[k].v-v);if(dr[i].v<=0.004)i++;if(cr[k].v<=0.004)k++;
+  }
+ });
+ /* Opening stock: balancing figure so that today's stock equals the old software's current stock */
+ srcItems.forEach(([i,id])=>{
+  const o=i.openingStockByFy,ks=o&&typeof o==="object"?Object.keys(o).sort():[];
+  if(!ks.length)return;
+  const last=ks[ks.length-1],m=mv[id]||{};let before=0;
+  Object.keys(m).forEach(f=>{if(f<last)before+=m[f]});
+  const it=D.item.find(x=>x.id===id);it.openq=Math.round(((+o[last]||0)-before)*1000)/1000;
+ });
+ const invp={};
+ [["sale","sale"],["purchase","purchase"],["salereturn","sale-return"],["purchasereturn","purchase-return"]].forEach(([k,s])=>{
+  try{const v=JSON.parse(st["vd-invoice-numbering-"+s+"-"+cid]||"null");if(v&&(v.prefix||v.suffix))invp[k]={prefix:String(v.prefix||""),suffix:String(v.suffix||"")}}catch(e){}
+ });
+ const n=D.party.length+D.item.length+D.sale.length+D.purchase.length+D.receipt.length+D.payment.length+D.journal.length;
+ return {co:{id:cid,name:c.name||c.printName||"",gstin:c.gstin||"",phone:c.phone||"",city:c.state||"",address:c.address||"",pin:c.pincode||"",stcode:cst},data:{...D,invp},n,made};
+}
 function obfImport(st){
  let cs=[];try{cs=JSON.parse(st["vd-companies"]||"[]")}catch(x){}
  if(!cs.length){alert("No companies were found in this file");return}
- let n=0;
- cs.forEach(c=>{const id=String(c.id);
-  if(DB.company.some(x=>x.id===id||(c.gstin&&x.gstin===c.gstin)))return;
-  DB.company.push({id,name:c.name||c.printName||"",gstin:c.gstin||"",phone:c.phone||"",city:c.state||"",address:c.address||"",pin:c.pincode||"",stcode:String(c.gstin||"").slice(0,2)});n++});
- if(st["vd-active"]&&DB.company.some(x=>x.id===String(st["vd-active"])))RS.company=String(st["vd-active"]);
+ let built;try{built=cs.map(c=>ofbCompany(st,c))}catch(e){alert("This backup could not be converted: "+e.message);return}
+ const withData=built.filter(b=>b.n>0);
+ const sum=b=>b.co.name+": "+b.data.party.length+" parties, "+b.data.item.length+" items, "+b.data.sale.length+" sales, "+b.data.purchase.length+" purchases, "+(b.data.receipt.length+b.data.payment.length)+" receipts/payments, "+b.data.journal.length+" journals";
+ if(!confirm("This backup has "+cs.length+" company(ies); data will be imported for "+withData.length+":\n\n"+withData.map(sum).join("\n")+"\n\nExisting data of these companies in this software will be replaced. Continue?"))return;
+ coEnsure();coStash();
+ let added=0;
+ built.forEach(b=>{
+  let ex=DB.company.find(x=>x.id===b.co.id||(b.co.gstin&&x.gstin===b.co.gstin));
+  if(!ex){DB.company.push(b.co);ex=b.co;added++}
+  if(b.n>0)DB.cd[ex.id]=b.data;
+ });
+ const want=String(st["vd-active"]||""),target=DB.company.some(x=>x.id===want)?want:(DB.activeCo||DB.company[0].id);
+ coLoad(target);
+ if(DB.cd[""]&&CO_KEYS.every(k=>!(DB.cd[""][k]||[]).length))delete DB.cd[""];
  save();
- alert(n+" company(ies) imported (login passwords and API keys are not imported).\nParty, Item and voucher data could not be read from this file. Use 'Create structure file' to export the structure of the file.");
- cur="company";render();
+ alert("Import completed.\n\n"+added+" new company(ies) added.\n"+withData.map(sum).join("\n")+"\n\nLogin passwords, API keys and API history are not imported. Opening stock is set so that current stock matches the old software.");
+ cur="dashboard";render();
 }
 function bkpLoad(f){
  if(!f)return;
@@ -540,6 +682,7 @@ function bkpLoad(f){
   if(!confirm("This will replace the current data with the backup data. Are you sure you want to restore?"))return;
   Object.keys(M).forEach(k=>DB[k]=Array.isArray(d[k])?d[k]:[]);
   if(d.settings)DB.settings={...d.settings,api:(DB.settings||{}).api};
+  DB.cd=d.cd&&typeof d.cd==="object"?d.cd:{};DB.activeCo=d.activeCo;coEnsure();
   save();alert("Restore completed");cur="dashboard";render();
  };
  rd.readAsText(f);
@@ -693,7 +836,7 @@ R.backup={t:"Data Backup & Restore",f(){
  ${gdCardHtml()}
  <div class="bcard"><div class="bico" style="background:#fff0d9;color:#d98300">${SVGI(IC_UP)}</div><h3>Folder Instant Backup</h3><p>Every time you save an entry, and every 10 minutes, the backup file in your chosen folder is updated automatically. A separate copy for each day is also kept. Choose a Google Drive or OneDrive synced folder to keep a cloud copy.</p>${box}${BK.last?`<div class="bnote">Last backup: ${esc(BK.last)}</div>`:""}<div class="bfoot"><button style="background:#2f4fd8" ${st==="unsupported"?"disabled":""} onclick="${st==="need"?"bkReconnect()":"bkChoose()"}">${SVGI(IC_UP2,16)} ${st==="need"?"Reconnect Folder":st==="ready"?"Change Folder":"Choose Folder"}</button><button class="ol" ${ready?"":"disabled"} onclick="bkNow()">${SVGI(IC_FILE,16)} Backup Now</button></div></div>
  <div class="bcard"><div class="bico" style="background:#e8edff;color:#3d5afe">${SVGI(IC_FILE)}</div><h3>Create Backup</h3><p>Download all companies, masters, invoices, returns, vouchers, ledgers and software settings in one file.</p><div class="bfoot"><button style="background:#2f4fd8;flex:0 1 auto" onclick="bkpDl()">${SVGI(IC_FILE,16)} Create &amp; Download Backup</button></div></div>
- <div class="bcard"><div class="bico" style="background:#e3f7ec;color:#14803c">${SVGI(IC_UP2)}</div><h3>Restore Backup</h3><p>After reinstalling, choose your saved backup file. Existing accounting data is replaced after you confirm. An ownfuturebright backup file imports its companies.</p>${f?`<div class="bnote" style="margin-top:12px">Selected file: <b>${esc(f.name)}</b></div>`:""}<div class="bfoot" style="flex-direction:column"><input id="bkfile" type="file" accept=".json,application/json" style="display:none" onchange="bkPick(this.files[0])"><button class="ol" onclick="document.getElementById('bkfile').click()">${SVGI(IC_UP2,16)} Choose Backup File</button><button style="background:#2f4fd8" ${f?"":"disabled"} onclick="bkRestore()">${SVGI(IC_FILE,16)} Restore Now</button></div></div>
+ <div class="bcard"><div class="bico" style="background:#e3f7ec;color:#14803c">${SVGI(IC_UP2)}</div><h3>Restore Backup</h3><p>After reinstalling, choose your saved backup file. Existing accounting data is replaced after you confirm. An ownfuturebright backup file imports its companies, parties, items and all vouchers.</p>${f?`<div class="bnote" style="margin-top:12px">Selected file: <b>${esc(f.name)}</b></div>`:""}<div class="bfoot" style="flex-direction:column"><input id="bkfile" type="file" accept=".json,application/json" style="display:none" onchange="bkPick(this.files[0])"><button class="ol" onclick="document.getElementById('bkfile').click()">${SVGI(IC_UP2,16)} Choose Backup File</button><button style="background:#2f4fd8" ${f?"":"disabled"} onclick="bkRestore()">${SVGI(IC_FILE,16)} Restore Now</button></div></div>
  </div>
  <div style="margin-top:18px;font-size:12px;color:#6b7690;line-height:1.8">Tools: create a small structure file (section and field names only, no values) from an ownfuturebright backup <input type="file" accept=".json,application/json" onchange="bkpSchema(this.files[0])" style="display:inline;width:auto;max-width:240px;border:0;padding:0;font-size:12px"></div>`}};
 
@@ -970,6 +1113,7 @@ function stockSummary(){
 }
 
 function render(){
+ coEnsure();
  if(RS.lastCur!==cur){RS.lastCur=cur;GROUPS.forEach(([g,,ks])=>{if(ks.includes(cur))OPEN[g]=true});Object.keys(CH).forEach(q=>{if(CH[q].includes(cur)){OPEN[q]=true;GROUPS.forEach(([g,,ks])=>{if(ks.includes(q))OPEN[g]=true})}})}
  buildNav();renderTop();
  const isR=!!R[cur],dash=cur==="dashboard";
@@ -1061,6 +1205,7 @@ function saveForm(){
 }
 
 function del(id){
+ if(cur==="company"){coDel(id);return}
  if(!confirm("Are you sure you want to delete this record?"))return;
  if(cur==="party"||cur==="item"){
   const used=Object.keys(M).some(k=>k!==cur&&DB[k].some(r=>r.party===id||r.item===id||r.dr===id||r.cr===id||(r.items||[]).some(l=>l.item===id)));
