@@ -1142,12 +1142,13 @@ function render(){
  $("extra").innerHTML=cur==="stock"?stockSummary():"";
  const q=$("q").value.toLowerCase();
  const cols=m.f.slice();
+ if(cur==="receipt"||cur==="payment")cols.push({k:"alloc",l:"Bills Settled"});
  if(m.tx)cols.push({k:"amount",l:"Amount"});
  let data=DB[cur].filter(r=>!q||cols.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q)));
  if(!data.length){$("list").innerHTML='<div class="empty">No records found</div>';return}
  let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
  data.forEach((r,i)=>{
-  html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(val(f,r[f.k]))}</td>`).join("")+
+  html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(f.k==="alloc"?(r.alloc||[]).map(a=>a.inv).join(", "):val(f,r[f.k]))}</td>`).join("")+
   `<td><button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
  });
  html+="</table>";
@@ -1156,6 +1157,44 @@ function render(){
   html+=`<div class="tot">Total: ₹ ${t.toFixed(2)}</div>`;
  }
  $("list").innerHTML=html;
+}
+
+/* ===== Pending bills for Receipt / Payment (auto-detect unpaid bills, tick to settle) ===== */
+const BILLK={receipt:"sale",payment:"purchase"};
+function pendBills(kind,party,skipId){
+ const bk=BILLK[kind],rk=kind==="receipt"?"salereturn":"purchasereturn";
+ const bills=DB[bk].filter(x=>x.party===party).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0).map(x=>({id:x.id,inv:String(x.inv||docNo(bk,x)),date:x.date,total:+x.amount||0,paid:0}));
+ let pool=0;
+ DB[kind].filter(r=>r.party===party&&r.id!==skipId).forEach(r=>{
+  let al=0;
+  (r.alloc||[]).forEach(a=>{
+   let v=+a.amount||0;al+=v;
+   const c=a.id?bills.filter(z=>z.id===a.id):bills.filter(z=>a.inv&&z.inv===String(a.inv));
+   for(const b of c){const u=Math.min(v,Math.max(b.total-b.paid,0));b.paid+=u;v-=u;if(v<=0.005)break}
+   pool+=Math.max(v,0)});
+  pool+=Math.max((+r.amount||0)-al,0);
+ });
+ DB[rk].filter(r=>r.party===party).forEach(r=>{pool+=+r.amount||0});
+ DB.journal.forEach(j=>{if((kind==="receipt"?j.cr:j.dr)===party)pool+=+j.amount||0});
+ bills.forEach(b=>{const need=b.total-b.paid;if(need>0.005&&pool>0){const u=Math.min(need,pool);b.paid+=u;pool-=u}});
+ return bills.map(b=>({...b,pend:r2(b.total-b.paid)})).filter(b=>b.pend>0.005);
+}
+RS.bl={sel:{},list:[]};
+function blLoad(init){
+ const p=$("f_party").value,L=p?pendBills(cur,p,editId):[],sel={};
+ if(init)(init.alloc||[]).forEach(a=>{const b=L.find(z=>(a.id&&z.id===a.id)||(!a.id&&a.inv&&z.inv===String(a.inv)));if(b)sel[b.id]=Math.min(+a.amount||0,b.pend)});
+ RS.bl={sel,list:L};blDraw();
+}
+function blSync(){const S=RS.bl.sel;if(Object.keys(S).length)$("f_amount").value=r2(Object.values(S).reduce((a,v)=>a+v,0))}
+function blTick(id,on){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;if(on)RS.bl.sel[id]=b.pend;else delete RS.bl.sel[id];blSync();blDraw()}
+function blAmt(id,v){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;RS.bl.sel[id]=Math.min(Math.max(+v||0,0),b.pend);blSync();blDraw()}
+function blDraw(){
+ const el=$("bills");if(!el)return;
+ const L=RS.bl.list,S=RS.bl.sel;
+ if(!$("f_party").value){el.innerHTML="";return}
+ if(!L.length){el.innerHTML='<div class="bnote" style="margin-top:12px">No pending bills for this party.</div>';return}
+ const tot=Object.values(S).reduce((a,v)=>a+v,0);
+ el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${b.date}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)}</div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
 }
 
 function openForm(id){
@@ -1173,7 +1212,9 @@ function openForm(id){
   }else if(f.t==="textarea"){inp=`<textarea id="f_${f.k}" rows="2">${esc(v)}</textarea>`}
   else inp=`<input id="f_${f.k}" type="${f.t||"text"}" ${f.t==="number"?'step="any"':""} value="${esc(v)}">`;
   return `<label>${f.l}${f.r?" *":""}</label>${inp}`;
- }).join("")+(m.tx?'<div class="tot" id="amt"></div>':"");
+ }).join("")+(m.tx?'<div class="tot" id="amt"></div>':"")+((cur==="receipt"||cur==="payment")?'<div id="bills"></div>':"");
+ $("dlg").style.width=(cur==="receipt"||cur==="payment")?"min(720px,95vw)":"";
+ if(cur==="receipt"||cur==="payment"){$("f_party").onchange=()=>blLoad();blLoad(id?rec:null)}
  if(m.tx){
   const calc=()=>{$("amt").textContent="Amount: ₹ "+((+$("f_qty").value||0)*(+$("f_rate").value||0)).toFixed(2)};
   $("f_qty").oninput=$("f_rate").oninput=calc;
@@ -1196,6 +1237,11 @@ function saveForm(){
   const v=$("f_"+f.k).value.trim();
   if(f.r&&!v){alert(f.l+" is required");return}
   rec[f.k]=v;
+ }
+ if(cur==="receipt"||cur==="payment"){
+  const S=RS.bl.sel,al=RS.bl.list.filter(b=>S[b.id]>0).map(b=>({id:b.id,inv:b.inv,amount:r2(S[b.id])})),t=al.reduce((a,x)=>a+x.amount,0);
+  if(t>(+rec.amount||0)+0.005){alert("Selected bills total (₹ "+n2(t)+") is more than the Amount");return}
+  rec.alloc=al;
  }
  if(cur==="journal"&&rec.dr===rec.cr){alert("Debit and Credit accounts must be different");return}
  if(m.tx)rec.amount=((+rec.qty||0)*(+rec.rate||0)).toFixed(2);
