@@ -161,10 +161,10 @@ const M={
  payment:{title:"Payment Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Party",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"mode",l:"Mode",opts:["Cash","Bank","UPI","Cheque"]},{k:"remark",l:"Remark"}]},
  journal:{title:"Journal Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"dr",l:"Debit Account (Party)",src:"party",r:1},{k:"cr",l:"Credit Account (Party)",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"remark",l:"Narration"}]}
 };
-const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
+const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
 const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
 const PT={accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
-const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",invset:"🔢",apiset:"🔑",urlset:"🔗"};
+const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",invset:"🔢",apiset:"🔑",urlset:"🔗"};
 const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:false,Other:false};
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
@@ -191,6 +191,7 @@ function dashGo(i){
  if(k!=="recv"&&k!=="pay"){RS.from=RS.fy+"-04-01";RS.to=(RS.fy+1)+"-03-31"}
  RS.back=null;cur=k;render();
 }
+function itemOf(id){RS.item=id;RS.back=null;cur="itemledger";render()}
 function ledgerOf(id){RS.party=id;RS.from="";RS.to="";cur="ledger";render()}
 const act=(k,id)=>`<button class="e" style="padding:3px 9px" onclick="regEdit('${k}','${id}')">Edit</button> <button class="d" style="padding:3px 9px" onclick="regDel('${k}','${id}')">Delete</button>`;
 function regEdit(k,id){if(KC[k])regOpen(k,id);else recOpen(k,id)}
@@ -281,6 +282,18 @@ function outst(recv){
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
 
+function stPick(id){RS.stItem=RS.stItem===id?"":id;render();if(RS.stItem)setTimeout(()=>{const e=document.getElementById("stpanel");if(e&&e.scrollIntoView)e.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
+function stPanel(it,pr){
+ const ev=[],u=esc(it.unit||""),T={sale:["Sale","#fde6e6","#e53935",-1],purchase:["Purchase","#e3f6ea","#14803c",1],salereturn:["Sale Return","#e8edff","#3d5afe",1],purchasereturn:["Purchase Return","#fff3dc","#b86e00",-1]};
+ Object.keys(T).forEach(k=>DB[k].forEach(x=>{if(!x.date||x.date<pr.from||x.date>pr.to)return;lines(x).forEach(l=>{if(l.item!==it.id)return;const q=+l.qty||0,tx=+l.taxable||q*(+l.rate||0),gs=+l.gst||0;ev.push({d:x.date,no:x.inv||"",t:T[k],p:lookup("party",x.party),q:T[k][3]*q,rate:+l.rate||0,tx,gs,tot:+l.total||tx*(1+gs/100)})})}));
+ DB.stock.filter(x=>x.item===it.id&&x.date>=pr.from&&x.date<=pr.to).forEach(x=>{const q=+x.qty||0,i=x.type==="In";ev.push({d:x.date,no:"",t:["Adjustment","#eee","#555"],p:x.remark||"",q:i?q:-q,rate:0,tx:0,gs:0,tot:0})});
+ ev.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+ const sin=ev.filter(e=>e.q>0).reduce((a,e)=>a+e.q,0),sout=-ev.filter(e=>e.q<0).reduce((a,e)=>a+e.q,0);
+ const lab=RS.periodType==="Financial Year"||RS.periodType==="Month"&&0?fyl(+(RS.periodFY??RS.fy)):fd(pr.from)+" – "+fd(pr.to);
+ const rows=ev.map(e=>`<tr><td>${fd(e.d)}</td><td><b>${esc(e.no)}</b></td><td><span style="background:${e.t[1]};color:${e.t[2]};padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700">${e.t[0]}</span></td><td>${esc(e.p)}</td><td style="text-align:right;font-weight:700;color:${e.q<0?"#e53935":"#14803c"}">${e.q<0?"−":"+"}${r3(Math.abs(e.q))} ${u}</td><td style="text-align:right">${e.rate?"₹"+n2(e.rate):""}</td><td style="text-align:right">${e.tx?"₹"+n2(e.tx):""}</td><td style="text-align:right">${e.gs?e.gs+"%":""}</td><td style="text-align:right"><b>${e.tot?"₹"+n2(e.tot):""}</b></td></tr>`).join("");
+ return `<div id="stpanel" style="margin-top:16px;border:1px solid #e1e5f0;border-radius:12px;overflow:hidden"><div style="display:flex;align-items:flex-start;gap:12px;padding:16px 18px"><div style="flex:1"><div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#3d5afe">ITEM TRANSACTION HISTORY</div><div style="font-size:22px;font-weight:600;margin:4px 0">${esc(it.name)}</div><div style="font-size:12px;color:#6b7690">${lab} mein is item ke sabhi Sale, Purchase aur Return bills &nbsp; <a class="lnk" style="font-size:12px" onclick="itemOf('${it.id}')">Full ledger (running balance)</a></div></div><button onclick="RS.stItem='';render()" style="background:#fff;color:#111;border:1px solid #111">✕ Close</button></div><div style="display:flex;border-top:1px solid #e1e5f0;border-bottom:1px solid #e1e5f0"><div style="flex:1;padding:12px 18px"><small style="color:#6b7690">TOTAL ENTRIES</small><div style="font-size:20px;font-weight:700">${ev.length}</div></div><div style="flex:1;padding:12px 18px;border-left:1px solid #e1e5f0"><small style="color:#6b7690">STOCK IN</small><div style="font-size:20px;font-weight:700;color:#14803c">+${r3(sin)} ${u}</div></div><div style="flex:1;padding:12px 18px;border-left:1px solid #e1e5f0"><small style="color:#6b7690">STOCK OUT</small><div style="font-size:20px;font-weight:700;color:#e53935">−${r3(sout)} ${u}</div></div></div><div style="overflow-x:auto"><table><tr><th>Date</th><th>Bill No.</th><th>Type</th><th>Party</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Taxable</th><th style="text-align:right">GST</th><th style="text-align:right">Total</th></tr>${rows||'<tr><td colspan="9" class="empty">No transactions in this period</td></tr>'}</table></div></div>`;
+}
+
 const R={
  dashboard:{t:"Dashboard",f(){
   const from=RS.fy+"-04-01",to=(RS.fy+1)+"-03-31",inF=x=>x.date>=from&&x.date<=to;
@@ -321,6 +334,17 @@ const R={
   let td=0,tc=0;
   e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.remark),n2(x.dr),n2(x.cr),dc(b),act(x.k,x.id)])});
   return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance","Action"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
+ itemledger:{t:"Item Ledger",f(){
+  const ctl=`<div class="ctl"><div><label>Item</label><select onchange="RS.item=this.value;render()"><option value="">-- Select --</option>${DB.item.map(i=>`<option value="${i.id}" ${i.id===RS.item?"selected":""}>${esc(i.name)}</option>`).join("")}</select></div></div>`;
+  const it=DB.item.find(x=>x.id===RS.item);if(!it)return ctl+'<div class="empty">Select an item (or click an item name in Stock Status / Item Master)</div>';
+  const pr=reportPeriodRange(),ev=[];
+  [["purchase",1],["salereturn",1],["sale",-1],["purchasereturn",-1]].forEach(([k,sg])=>DB[k].forEach(x=>lines(x).forEach(l=>{if(l.item===it.id){const q=+l.qty||0;ev.push({k,id:x.id,d:x.date,t:M[k].title,no:x.inv||"",p:lookup("party",x.party),rm:x.remark||"",rate:+l.rate||0,in:sg>0?q:0,out:sg<0?q:0})}})));
+  DB.stock.filter(x=>x.item===it.id).forEach(x=>{const q=+x.qty||0;ev.push({k:"stock",id:x.id,d:x.date,t:"Stock Adjustment",no:"",p:"",rm:x.remark||"",rate:0,in:x.type==="In"?q:0,out:x.type==="In"?0:q})});
+  ev.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+  let b=+it.openq||0;ev.filter(e=>e.d<pr.from).forEach(e=>b+=e.in-e.out);
+  const rows=[["","<i>Opening Qty</i>","","","","","","",r3(b),""]];let ti=0,to=0;
+  ev.filter(e=>e.d>=pr.from&&e.d<=pr.to).forEach(e=>{b+=e.in-e.out;ti+=e.in;to+=e.out;rows.push([e.d,e.t,esc(e.no),esc(e.p),esc(e.rm),e.in||"",e.out||"",e.rate?n2(e.rate):"",`<span class="${b<0?"neg":""}">${r3(b)}</span>`,act(e.k,e.id)])});
+  return ctl+tbl(["Date","Voucher","Bill No.","Party","Remark","In","Out","Rate","Balance Qty","Action"],rows,`${esc(it.name)} &nbsp; In: ${r3(ti)} &nbsp; Out: ${r3(to)} &nbsp; Closing Qty: ${r3(b)} ${esc(it.unit||"")}`)}},
  stockstatus:{t:"Stock Status",f(){
   const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
   const pr=reportPeriodRange();
@@ -329,11 +353,17 @@ const R={
   const cnt={all:all.length,in:all.filter(x=>x.s!=="out").length,low:all.filter(x=>x.s==="low").length,out:all.filter(x=>x.s==="out").length};
   const f=RS.sf||"all",q=(RS.sq||"").toLowerCase();
   const l=all.filter(x=>(f==="all"||(f==="in"?x.s!=="out":x.s===f))&&(!q||(x.i.name+" "+(x.i.code||"")).toLowerCase().includes(q)));
-  let tv=0;
-  const r=l.map(({i,q,op,inn,out,s})=>{const v=q*(+i.prate||0);tv+=v;return [esc(i.name),esc(i.code||""),esc(i.unit||""),op,inn,out,`<span class="${q<0?"neg":""}">${q}</span>`,n2(i.prate),n2(v),lab[s]]});
+  let tv=0,tq=0;
+  const pill={ok:["In Stock","#e3f6ea","#14803c"],low:["Low Stock","#fff3dc","#b86e00"],out:["Out of Stock","#fde6e6","#e53935"]};
+  const ini=n=>String(n||"").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+  const r=l.map(({i,q,op,inn,out,s})=>{const v=q*(+i.prate||0);tv+=v;tq+=q;const u=esc(i.unit||""),pl=pill[s],on=RS.stItem===i.id;
+   return `<tr onclick="stPick('${i.id}')" style="cursor:pointer;${on?"background:#f1f4ff":""}"><td><div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:8px;background:#eef1ff;color:#3d5afe;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${esc(ini(i.name))}</span><div><b>${esc(i.name)}</b><div style="font-size:11px;color:#6b7690">${u} • Transactions dekhein</div></div></div></td><td>${esc(i.hsn||"-")}</td><td>${op} ${u}</td><td style="color:#14803c;font-weight:600">+${inn}</td><td style="color:#e53935;font-weight:600">−${out}</td><td><b class="${q<0?"neg":""}">${q} ${u}</b></td><td><b>₹${n2(v)}</b></td><td><span style="background:${pl[1]};color:${pl[2]};padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700">${pl[0]}</span></td></tr>`});
+  const sel=DB.item.find(x=>x.id===RS.stItem);
+  const panel=sel?stPanel(sel,pr):"";
   const opt=[["all","All Items"],["in","In Stock"],["low","Low Stock"],["out","Out of Stock"]].map(([v,t])=>`<option value="${v}" ${f===v?"selected":""}>${t} (${cnt[v]})</option>`).join("");
   const ctl=`<div class="ctl"><div><label>Search Item</label><input id="sq" placeholder="Item name / code" value="${esc(RS.sq||"")}" oninput="RS.sq=this.value;render();const e=document.getElementById('sq');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div><div><label>Filter</label><select onchange="RS.sf=this.value;render()">${opt}</select></div></div>`;
-  return ctl+tbl(["Item","Code","Unit","Opening Qty","In (Purchase/Return)","Out (Sale/Return)","Closing Qty","Purchase Rate","Closing Value","Status"],r,`Showing ${l.length} items &nbsp; Stock as on ${fd(pr.to)} &nbsp; Total Stock Value: ₹ ${n2(tv)}`)}}
+  const tb=`<table><tr><th>Item</th><th>HSN</th><th>Opening</th><th>Stock In</th><th>Stock Out</th><th>Closing</th><th>Value</th><th>Status</th></tr>${r.length?r.join(""):`<tr><td colspan="8" class="empty">No data found</td></tr>`}<tr style="background:#f7f8ff"><td colspan="5"><b>Grand Total (${l.length} items) &nbsp; Stock as on ${fd(pr.to)}</b></td><td><b>${r3(tq)} Units</b></td><td><b>₹${n2(tv)}</b></td><td></td></tr></table>`;
+  return ctl+tb+panel}}
 };
 
 const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
@@ -1143,7 +1173,7 @@ function render(){
   if(gated&&RS.gateOk!==cur){$("list").className="";$("list").innerHTML=gateHtml();setTimeout(()=>{const e=$("gpw");if(e&&e.focus)e.focus()},50)}
   else {
    const reportHtml=(()=>{
-    if(cur==="dashboard") return R[cur].f();
+    if(cur==="dashboard"||["ledger","recv","pay","finpos","payremind","stockstatus","itemledger"].includes(cur)) return R[cur].f();
     const dateKeys=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","stock"];
     const saved={}; const range=reportPeriodRange();
     dateKeys.forEach(k=>{saved[k]=DB[k];DB[k]=(DB[k]||[]).filter(x=>!x.date||(x.date>=range.from&&x.date<=range.to));});
@@ -1166,7 +1196,7 @@ function render(){
  let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
  data.forEach((r,i)=>{
   html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(f.k==="alloc"?(r.alloc||[]).map(a=>a.inv).join(", "):val(f,r[f.k]))}</td>`).join("")+
-  `<td><button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
+  `<td>${cur==="item"?`<button class="e" style="background:#6a4cd9" onclick="itemOf('${r.id}')">Ledger</button> `:""}<button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
  });
  html+="</table>";
  if(m.tx||cur==="receipt"||cur==="payment"||cur==="journal"){
