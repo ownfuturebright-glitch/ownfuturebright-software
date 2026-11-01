@@ -207,6 +207,15 @@ const sum=k=>DB[k].reduce((a,x)=>a+sv(x),0);
 const stockQty=i=>{let q=+i.openq||0;const s=k=>DB[k].reduce((a,x)=>a+lines(x).filter(l=>l.item===i.id).reduce((b,l)=>b+(+l.qty||0),0),0);
  q+=s("purchase")+s("salereturn")-s("sale")-s("purchasereturn");
  DB.stock.filter(x=>x.item===i.id).forEach(x=>q+=(x.type==="In"?1:-1)*(+x.qty||0));return q};
+const stockMv=(i,from,to)=>{
+ let inn=0,out=0;const ok=d=>(!from||d>=from)&&(!to||d<=to);
+ const q=(k,sg)=>DB[k].forEach(x=>{if(!ok(x.date))return;lines(x).forEach(l=>{if(l.item===i.id){const v=+l.qty||0;if(sg>0)inn+=v;else out+=v}})});
+ q("purchase",1);q("salereturn",1);q("sale",-1);q("purchasereturn",-1);
+ DB.stock.forEach(x=>{if(x.item===i.id&&ok(x.date)){const v=+x.qty||0;if(x.type==="In")inn+=v;else out+=v}});
+ return {inn,out};
+};
+const prevDay=d=>new Date(new Date(d+"T00:00:00Z").getTime()-864e5).toISOString().slice(0,10);
+const r3=v=>Math.round(v*1000)/1000;
 const LED={sale:"dr",salereturn:"cr",purchase:"cr",purchasereturn:"dr",payment:"dr",receipt:"cr"};
 function entries(pid){const e=[];
  for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?+x.amount||0:0,cr:LED[k]==="cr"?+x.amount||0:0}));
@@ -307,16 +316,17 @@ const R={
   return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance","Action"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
  stockstatus:{t:"Stock Status",f(){
   const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
-  const all=DB.item.map(i=>{const q=stockQty(i);return {i,q,s:q<=0?"out":q<=lim(i)?"low":"ok"}});
+  const pr=reportPeriodRange();
+  const all=DB.item.map(i=>{const b=stockMv(i,"",prevDay(pr.from)),m=stockMv(i,pr.from,pr.to),op=r3((+i.openq||0)+b.inn-b.out),q=r3(op+m.inn-m.out);return {i,q,op,inn:r3(m.inn),out:r3(m.out),s:q<=0?"out":q<=lim(i)?"low":"ok"}});
   const lab={ok:'<b style="color:#14803c">In Stock</b>',low:'<b style="color:#e08a00">Low Stock</b>',out:'<b style="color:#e53935">Out of Stock</b>'};
   const cnt={all:all.length,in:all.filter(x=>x.s!=="out").length,low:all.filter(x=>x.s==="low").length,out:all.filter(x=>x.s==="out").length};
   const f=RS.sf||"all",q=(RS.sq||"").toLowerCase();
   const l=all.filter(x=>(f==="all"||(f==="in"?x.s!=="out":x.s===f))&&(!q||(x.i.name+" "+(x.i.code||"")).toLowerCase().includes(q)));
   let tv=0;
-  const r=l.map(({i,q,s})=>{const v=q*(+i.prate||0);tv+=v;return [esc(i.name),esc(i.code||""),esc(i.unit||""),`<span class="${q<0?"neg":""}">${q}</span>`,n2(i.prate),n2(v),lab[s]]});
+  const r=l.map(({i,q,op,inn,out,s})=>{const v=q*(+i.prate||0);tv+=v;return [esc(i.name),esc(i.code||""),esc(i.unit||""),op,inn,out,`<span class="${q<0?"neg":""}">${q}</span>`,n2(i.prate),n2(v),lab[s]]});
   const opt=[["all","All Items"],["in","In Stock"],["low","Low Stock"],["out","Out of Stock"]].map(([v,t])=>`<option value="${v}" ${f===v?"selected":""}>${t} (${cnt[v]})</option>`).join("");
   const ctl=`<div class="ctl"><div><label>Search Item</label><input id="sq" placeholder="Item name / code" value="${esc(RS.sq||"")}" oninput="RS.sq=this.value;render();const e=document.getElementById('sq');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div><div><label>Filter</label><select onchange="RS.sf=this.value;render()">${opt}</select></div></div>`;
-  return ctl+tbl(["Item","Code","Unit","Stock Qty","Purchase Rate","Stock Value","Status"],r,`Showing ${l.length} items &nbsp; Total Stock Value: ₹ ${n2(tv)}`)}}
+  return ctl+tbl(["Item","Code","Unit","Opening Qty","In (Purchase/Return)","Out (Sale/Return)","Closing Qty","Purchase Rate","Closing Value","Status"],r,`Showing ${l.length} items &nbsp; Stock as on ${fd(pr.to)} &nbsp; Total Stock Value: ₹ ${n2(tv)}`)}}
 };
 
 const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
