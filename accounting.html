@@ -152,7 +152,7 @@ const tx=(t)=>({title:t,tx:1,f:[
  {k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"remark",l:"Remark"}]});
 const M={
  company:{title:"Company Master",f:[{k:"name",l:"Company Name",r:1},{k:"gstin",l:"GSTIN"},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"address",l:"Address",t:"textarea"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"}]},
- party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
+ party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"cash",l:"Cash Party (not shown in Outstanding)",opts:["No","Yes"]},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
  item:{title:"Item Master",f:[{k:"name",l:"Item Name",r:1},{k:"code",l:"Item Code"},{k:"unit",l:"Unit",opts:UNITS},{k:"srate",l:"Sale Rate",t:"number"},{k:"prate",l:"Purchase Rate",t:"number"},{k:"openq",l:"Opening Stock Qty",t:"number"},{k:"minq",l:"Low Stock Limit (Qty, blank = 10)",t:"number"},{k:"roq",l:"Reorder Qty (Auto PO)",t:"number"},{k:"supp",l:"Default Supplier (Auto PO)",src:"party"},{k:"hsn",l:"HSN Code"},{k:"gst",l:"GST %",t:"number"}]},
  stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
  sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Sale Return"), purchasereturn:tx("Purchase Return"),
@@ -222,6 +222,9 @@ function entries(pid){const e=[];
  DB.journal.forEach(x=>{if(x.dr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
+/* Cash parties (Cash, Cash Sale, ...) are settled on the spot, so they are left out of Outstanding / Receivable / Payable */
+const isCashParty=p=>!!p&&(p.cash==="Yes"||/^cash(\s*(a\/c|account|sales?|purchases?))?$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
+const recvBal=p=>isCashParty(p)?0:bal(p);
 function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
 function reportTable(){return document.querySelector('#list table')}
 function exportReportExcel(){
@@ -237,9 +240,13 @@ function exportReportPDF(){
  w.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#e8ecf7} .tot{margin-top:10px;text-align:right;font-weight:bold}@media print{button{display:none}}</style></head><body><h2>'+title+'</h2>'+clone.outerHTML+'<script>window.onload=()=>{window.print()}<\/script></body></html>');w.document.close();
 }
 const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
-const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="RS.${k}=this.value;render()"></div>`;
+const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="setDt('${k}',this.value)"></div>`;
 const isBank=x=>(x.mode||"Cash")!=="Cash";
 
+function setDt(k,v){
+ const y=+String(v).slice(0,4);
+ if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&y>=1990&&y<=2100){RS[k]=v;render()}
+}
 function reportPeriodRange(){
  const type=RS.periodType||"Month", fy=+(RS.periodFY??RS.fy), m=+(RS.periodMonth||4);
  if(type==="Custom Date") return {from:RS.periodFrom||fy+"-04-01",to:RS.periodTo||(fy+1)+"-03-31"};
@@ -252,7 +259,7 @@ function reportPeriodControls(){
  const months=names.map((name,i)=>`<option value="${i+1}" ${+(RS.periodMonth||4)===i+1?"selected":""}>${name}</option>`).join("");
  const fys=Array.from({length:8},(_,i)=>FY0+2-i).map(y=>`<option value="${y}" ${y===fy?"selected":""}>${fyl(y)}</option>`).join("");
  const r=reportPeriodRange();
- return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;render()">${fys}</select></div>${RS.periodType==="Custom Date"?`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="RS.periodFrom=this.value;render()"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="RS.periodTo=this.value;render()"></div>`:""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
+ return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`:""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
 }
 function bookPeriodRange(){return reportPeriodRange()}
 function bookPeriodControls(){return reportPeriodControls()}
@@ -267,7 +274,7 @@ function book(title,pick){
  return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
 }
 function outst(recv){
- const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>recv?b>0:b<0);
+ const l=DB.party.map(p=>[p,recvBal(p)]).filter(([p,b])=>recv?b>0:b<0);
  const t=l.reduce((a,[p,b])=>a+Math.abs(b),0);
  return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
 }
@@ -278,7 +285,7 @@ const R={
  dashboard:{t:"Dashboard",f(){
   const from=RS.fy+"-04-01",to=(RS.fy+1)+"-03-31",inF=x=>x.date>=from&&x.date<=to;
   const fy=k=>DB[k].filter(inF).reduce((a,x)=>a+sv(x),0);
-  const bl=DB.party.map(bal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0);
+  const bl=DB.party.map(recvBal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0);
   const L=fyl(RS.fy),mv=Array(12).fill(0),nm=["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
   DB.sale.filter(inF).forEach(x=>mv[(parseInt(x.date.slice(5,7))+8)%12]+=sv(x));
   const mx=Math.max(...mv,1);
@@ -303,7 +310,7 @@ const R={
   const ns=sum("sale")-sum("salereturn"),np=sum("purchase")-sum("purchasereturn"),gp=ns+cl-op-np;
   return tbl(["Particulars","Amount (₹)"],[["Opening Stock",n2(op)],["Purchases",n2(sum("purchase"))],["Less: Purchase Return",n2(sum("purchasereturn"))],["Net Purchases",n2(np)],["Sales",n2(sum("sale"))],["Less: Sale Return",n2(sum("salereturn"))],["Net Sales",n2(ns)],["Closing Stock (at purchase rate)",n2(cl)],[`<b>${gp>=0?"Gross Profit":"Gross Loss"}</b>`,`<b class="${gp<0?"neg":""}">${n2(Math.abs(gp))}</b>`]])}},
  finpos:{t:"Financial Position",f(){
-  const bl=DB.party.map(bal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0),[c,b]=cashBank(),sv=stockVal();
+  const bl=DB.party.map(recvBal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0),[c,b]=cashBank(),sv=stockVal();
   return tbl(["Particulars","Amount (₹)"],[["Receivable (Debtors)",n2(rc)],["Payable (Creditors)",n2(pb)],["Cash in Hand",n2(c)],["Bank / UPI / Cheque",n2(b)],["Stock Value",n2(sv)],["<b>Net (Receivable + Cash + Bank + Stock − Payable)</b>",`<b>${n2(rc+c+b+sv-pb)}</b>`]])}},
  ledger:{t:"Party Ledger",f(){
   const ctl=`<div class="ctl"><div><label>Party</label><select onchange="RS.party=this.value;render()"><option value="">-- Select --</option>${DB.party.map(p=>`<option value="${p.id}" ${p.id===RS.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
@@ -408,7 +415,7 @@ const remMsg=p=>RS.rmsg.replace(/\{name\}/g,p.name).replace(/\{amount\}/g,n2(bal
 function wa(id){const p=DB.party.find(x=>x.id===id);let ph=String(p.phone||"").replace(/\D/g,"");if(ph.length===10)ph="91"+ph;if(!ph){alert("This party has no phone number");return}window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(remMsg(p)),"_blank")}
 function cpRem(id){cpTxt(remMsg(DB.party.find(x=>x.id===id)))}
 R.payremind={t:"Payment Reminder",f(){
- const l=DB.party.map(p=>[p,bal(p)]).filter(([p,b])=>b>0).sort((a,b)=>b[1]-a[1]);
+ const l=DB.party.map(p=>[p,recvBal(p)]).filter(([p,b])=>b>0).sort((a,b)=>b[1]-a[1]);
  const ctl=`<div style="padding:14px"><label style="margin-top:0">Message ({name}, {amount} and {company} are filled in automatically)</label><textarea rows="3" oninput="RS.rmsg=this.value">${esc(RS.rmsg)}</textarea></div>`;
  return ctl+tbl(["Party","Phone","City","Outstanding (Dr)","Reminder"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(b),`<button class="e" style="background:#25a244" onclick="wa('${p.id}')">WhatsApp</button> <button class="e" style="background:#8a94a8" onclick="cpRem('${p.id}')">Copy</button>`]),`Total outstanding: ₹ ${n2(l.reduce((a,[p,b])=>a+b,0))}`)}};
 
@@ -1173,6 +1180,7 @@ function render(){
 const BILLK={receipt:"sale",payment:"purchase"};
 function pendBills(kind,party,skipId){
  const bk=BILLK[kind],rk=kind==="receipt"?"salereturn":"purchasereturn";
+ if(isCashParty(DB.party.find(x=>x.id===party)))return [];
  const bills=DB[bk].filter(x=>x.party===party).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0).map(x=>({id:x.id,inv:String(x.inv||docNo(bk,x)),date:x.date,total:+x.amount||0,paid:0}));
  let pool=0;
  DB[kind].filter(r=>r.party===party&&r.id!==skipId).forEach(r=>{
