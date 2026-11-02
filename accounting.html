@@ -534,8 +534,8 @@ function findKey(o,k){if(o&&typeof o==="object"){if(k in o&&typeof o[k]==="strin
 function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
  if(!L.some(z=>z[0]===a.act))a.act="gen";
- const sig=kind+e+a.act+RS.es+RS.irn+JSON.stringify(RS.ew);
- if(a.sig!==sig){a.sig=sig;a.body=JSON.stringify(apiTpl(kind,a.act),null,2)}
+ const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
+ if(a.sig!==sig){a.sig=sig;const T0=apiTpl(kind,a.act);a.body=JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...cr0,...T0},null,2)}
  const act=L.find(z=>z[0]===a.act);
  return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
  <b>⚡ Webtel API (${live?"Live":"Sandbox"})</b>
@@ -551,7 +551,7 @@ function apiPanel(kind,live){
 async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
- const C=apiCfg();let cr={};try{cr=JSON.parse(C[credKey(kind,live)]||"{}")}catch(x){alert("The credentials in Webtel API Settings are not valid JSON");return}
+ const C=apiCfg(),cr=credEff(kind,live);if(cr===null){alert("The credentials in Webtel API Settings are not valid JSON");return}
  h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body={...cr,...body};
  if(live&&!confirm("LIVE API: "+act[1]+"\nThis "+(kind==="einv"?"e-invoice":"e-way bill")+" will create or change a real document. Are you sure you want to send it?"))return;
  a.resp="Sending...";render();
@@ -934,8 +934,14 @@ R.invset={t:"Invoice Number Settings",f(){
  const dirty=Object.keys(RS.invd).length>0;
  return `<div class="ig">${INVT.map(card).join("")}</div><div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px"><span id="inv_msg" style="font-size:13px;${RS.invMsg==="saved"?"color:#14803c":"color:#e08a00"}">${RS.invMsg==="saved"?"✔ Saved":dirty?"● Unsaved changes":""}</span><button class="isave" onclick="invSave()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Save Invoice Number Settings</button></div><div style="font-size:12px;color:#6b7690;margin-top:12px;line-height:1.7">When a prefix or suffix is set, a new entry opens with the next invoice number already filled in (you can still edit it). The next number is the highest existing number with the same prefix and suffix, plus 1. To start from a specific number, enter the first invoice manually, for example TE/74/26-27.</div>`}};
 const apiCfg=()=>{const id=comp().id||"_",S=DB.settings.api=DB.settings.api||{};return S[id]||(S[id]={sand:"{}",sandw:"{}",live:"{}",livew:"{}",mode:"body"})};
+function credEff(kind,live){
+ const C=apiCfg();let cr={};
+ try{cr=JSON.parse(C[credKey(kind,live)]||"{}")}catch(x){return null}
+ if(!Object.keys(cr).length&&!live){const g=sbxFor(comp());if(g)cr=sbxCred(kind,g)}
+ return cr;
+}
 const credKey=(kind,live)=>(live?"live":"sand")+(kind==="ewb"?"w":"");
-const credInfo=(kind,e)=>{const C=apiCfg();let n=0;try{n=Object.keys(JSON.parse(C[credKey(kind,e==="l")]||"{}")).length}catch(x){}return n+" key(s) set, sent in the "+(C.mode==="headers"?"HTTP headers":"request body")};
+const credInfo=(kind,e)=>{const C=apiCfg();const cr=credEff(kind,e==="l");const n=cr?Object.keys(cr).length:0;return n+" key(s) set, sent in the "+(C.mode==="headers"?"HTTP headers":"request body")};
 function apiSetJ(k,v){try{JSON.parse(v||"{}")}catch(x){alert('Enter valid JSON, for example {"CDKey":"..."}');return}apiCfg()[k]=v.trim()||"{}";save();render()}
 function apiSetMode(v){apiCfg().mode=v;save();render()}
 const SBX_G="29AAACW3775F000 01AAACW3775F008 02AAACW3775F009 03AAACW3775F010 04AAACW3775F011 05AAACW3775F012 06AAACW3775F013 07AAACW3775F006 08AAACW3775F014 09AAACW3775F015 10AAACW3775F016 11AAACW3775F017 12AAACW3775F018 13AAACW3775F019 14AAACW3775F020 15AAACW3775F021 16AAACW3775F022 17AAACW3775F023 18AAACW3775F024 19AAACW3775F025 20AAACW3775F026 21AAACW3775F027 22AAACW3775F028 23AAACW3775F029 24AAACW3775F030 25AAACW3775F031 26AAACW3775F032 27AAACW3775F007 30AAACW3775F033 31AAACW3775F034 32AAACW3775F035 33AAACW3775F036 34AAACW3775F037 35AAACW3775F038 36AAACW3775F039 37AAACW3775F040".split(" ");
