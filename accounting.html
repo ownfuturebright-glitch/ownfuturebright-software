@@ -172,10 +172,10 @@ const M={
  payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  journal:{title:"Journal Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"dr",l:"Debit Account (Party)",src:"party",r:1},{k:"cr",l:"Credit Account (Party)",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"remark",l:"Narration"}]}
 };
-const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
+const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
 const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
 const PT={accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
-const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",invset:"🔢",apiset:"🔑",urlset:"🔗"};
+const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",invset:"🔢",apiset:"🔑",urlset:"🔗"};
 const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:false,Other:false};
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
@@ -204,9 +204,10 @@ function dashGo(i){
 }
 function itemOf(id){RS.item=id;RS.back=null;cur="itemledger";render()}
 function ledgerOf(id){RS.party=id;RS.from="";RS.to="";cur="ledger";render()}
-const act=(k,id)=>`<button class="e" style="padding:3px 9px" onclick="regEdit('${k}','${id}')">Edit</button> <button class="d" style="padding:3px 9px" onclick="regDel('${k}','${id}')">Delete</button>`;
-function regEdit(k,id){if(KC[k])regOpen(k,id);else recOpen(k,id)}
-function regDel(k,id){if(!confirm("Are you sure you want to delete this entry?"))return;DB[k]=DB[k].filter(x=>x.id!==id);save();render()}
+function liveIrnLocked(k,id){const x=(DB[k]||[]).find(z=>z.id===id);return k==="sale"&&!!(x&&x.irn&&x.irnEnvironment!=="sand")}
+const act=(k,id)=>liveIrnLocked(k,id)?`<button disabled title="Live E-Invoice generated: editing is locked" style="padding:3px 9px;opacity:.45;cursor:not-allowed">Edit 🔒</button> <button disabled title="Live E-Invoice generated: deletion is locked" style="padding:3px 9px;opacity:.45;cursor:not-allowed">Delete 🔒</button>`:`<button class="e" style="padding:3px 9px" onclick="regEdit('${k}','${id}')">Edit</button> <button class="d" style="padding:3px 9px" onclick="regDel('${k}','${id}')">Delete</button>`;
+function regEdit(k,id){if(liveIrnLocked(k,id)){alert("Live E-Invoice generated. Edit is disabled for this invoice.");return}if(KC[k])regOpen(k,id);else recOpen(k,id)}
+function regDel(k,id){if(liveIrnLocked(k,id)){alert("Live E-Invoice generated. Delete is disabled for this invoice.");return}if(!confirm("Are you sure you want to delete this entry?"))return;DB[k]=DB[k].filter(x=>x.id!==id);save();render()}
 function regOpen(k,id){RS.back=KC[cur]?null:cur;cur=k;RS.sf=null;openSale(id)}
 function recOpen(k,id){RS.ret=cur;RS.newParty=null;RS.newItem=null;cur=k;render();openForm(id)}
 function go(k){cur=k;RS.sf=null;RS.back=null;render();openForm()}
@@ -455,6 +456,16 @@ RS.rmsg="Hello {name}, this is a reminder from {company} that ₹{amount} is out
 const remMsg=p=>RS.rmsg.replace(/\{name\}/g,p.name).replace(/\{amount\}/g,n2(bal(p))).replace(/\{company\}/g,comp().name||"");
 function wa(id){const p=DB.party.find(x=>x.id===id);let ph=String(p.phone||"").replace(/\D/g,"");if(ph.length===10)ph="91"+ph;if(!ph){alert("This party has no phone number");return}window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(remMsg(p)),"_blank")}
 function cpRem(id){cpTxt(remMsg(DB.party.find(x=>x.id===id)))}
+R.gstreminder={t:"GST Return Reminder",f(){
+ const S=DB.settings.gstReminder=DB.settings.gstReminder||{enabled:true,gstr1:5,gstr3b:10};
+ const todayStr=today(),day=+todayStr.slice(8,10),month=todayStr.slice(0,7);
+ const done=S.done||{};
+ const rows=[{k:"gstr1",name:"GSTR-1",d:+S.gstr1||5},{k:"gstr3b",name:"GSTR-3B",d:+S.gstr3b||10}];
+ return `<div class="pan" style="padding:18px;margin-bottom:16px"><b>GST Return Due Date Reminder</b><p style="font-size:13px;color:#6b7690">Har mahine due date par software kholne par reminder dikhaya jayega. Browser band hone par reminder background mein nahi aayega.</p><div class="ctl"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${S.enabled!==false?"checked":""} onchange="DB.settings.gstReminder.enabled=this.checked;save();render()"> Enable GST reminders</label></div>${rows.map(r=>`<div class="ctl" style="align-items:end"><div><label>${r.name} Reminder Date (monthly)</label><input type="number" min="1" max="28" value="${r.d}" onchange="DB.settings.gstReminder.${r.k}=Math.max(1,Math.min(28,+this.value||${r.d}));save()"></div><div style="font-size:13px;color:#6b7690">Every month on ${r.d}th</div><button onclick="gstReminderDone('${r.k}')">Mark this month done</button></div>`).join("")}<button class="g" onclick="gstReminderCheck(true)">Check Due Reminders</button></div><div class="pan" style="padding:18px"><b>Reminder Status – ${month}</b>${rows.map(r=>`<p style="font-size:13px">${r.name}: <b>${done[month+"_"+r.k]?"Completed":"Pending"}</b> · Due date ${r.d}</p>`).join("")}</div>`
+}};
+function gstReminderDone(k){const S=DB.settings.gstReminder=DB.settings.gstReminder||{};S.done=S.done||{};S.done[today().slice(0,7)+"_"+k]=true;save();render()}
+function gstReminderCheck(force){const S=DB.settings.gstReminder||{enabled:true,gstr1:5,gstr3b:10};if(S.enabled===false&&!force)return;const d=+today().slice(8,10),m=today().slice(0,7),done=S.done||{};const due=[ ["gstr1","GSTR-1",+S.gstr1||5],["gstr3b","GSTR-3B",+S.gstr3b||10] ].filter(x=>d>=x[2]&&!done[m+"_"+x[0]]);if(due.length)alert("GST Return Reminder\n"+due.map(x=>x[1]+" is due on "+x[2]+"th. Please prepare/file the return.").join("\n"));else if(force)alert("Aaj koi pending GST return reminder nahi hai.")}
+
 R.payremind={t:"Payment Reminder",f(){
  const l=DB.party.map(p=>[p,recvBal(p)]).filter(([p,b])=>b>0).sort((a,b)=>b[1]-a[1]);
  const ctl=`<div style="padding:14px"><label style="margin-top:0">Message ({name}, {amount} and {company} are filled in automatically)</label><textarea rows="3" oninput="RS.rmsg=this.value">${esc(RS.rmsg)}</textarea></div>`;
@@ -587,7 +598,7 @@ async function apiSend(kind,live){
   if(!r){lastErr.tried=cands;throw lastErr}
   const t=await r.text();a.resp="HTTP "+r.status+(used!==u0?"  (sent to "+used+")":"")+"\n"+t;
   try{const J=JSON.parse(t),fa=k=>{const v=fany(J,k);return v===""?"":String(v)},irn=findKey(J,"Irn"),x=DB.sale.find(z=>z.id===RS.es);
-   if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;if(x){x.irn=irn;x.ackNo=fa("AckNo")||x.ackNo;x.ackDate=fa("AckDt")||x.ackDate;x.qrCodeImage=fa("QRCodeImage")||fa("qrCodeImage")||x.qrCodeImage;x.signedQrCode=fa("SignedQRCode")||x.signedQrCode;save()}}
+   if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;if(x){x.irn=irn;x.irnEnvironment=live?"live":"sand";x.irnGeneratedAt=new Date().toISOString();x.ackNo=fa("AckNo")||x.ackNo;x.ackDate=fa("AckDt")||x.ackDate;x.qrCodeImage=fa("QRCodeImage")||fa("qrCodeImage")||x.qrCodeImage;x.signedQrCode=fa("SignedQRCode")||x.signedQrCode;save()}}
    const en=fa("ewayBillNo")||fa("EwbNo")||fa("ewbNo");
    if(en&&kind==="ewb"&&x&&(a.act==="gen"||a.act==="genirn")){x.ewbNumber=en;x.ewbDate=fa("ewayBillDate")||fa("EwbDt")||x.ewbDate;x.ewbValidTill=fa("validUpto")||fa("EwbValidTill")||x.ewbValidTill;save()}
   }catch(x){}
@@ -1599,6 +1610,7 @@ $("cx").onclick=()=>$("dlg").close();
 $("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty,ni=RS.newItem;RS.ret=null;RS.newParty=null;RS.newItem=null;cur=k;render();if(np&&RS.sf)sfParty(np);if(ni&&RS.sf)sfItemNew(ni)}});
 $("q").oninput=render;
 render();
+gstReminderCheck(false);
 bkInit();
 </script>
 </body>
