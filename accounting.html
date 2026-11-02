@@ -972,8 +972,8 @@ R.apiset={t:"Webtel API Settings",f(){
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px">
  ${ta("sand","E-Invoice Sandbox credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"...","GSTIN":"...","Bill_From_GSTIN":"..."}')}
  ${ta("sandw","E-Way Bill Sandbox credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EWBUserName":"...","EWBPassword":"...","GSTIN":"...","Bill_From_GSTIN":"..."}')}
- ${ta("live","E-Invoice Live credentials (JSON)",'{"Cdkey":"...","EInvUserName":"...","EInvPassword":"..."}')}
- ${ta("livew","E-Way Bill Live credentials (JSON)",'{"Cdkey":"...","EWBUserName":"...","EWBPassword":"..."}')}
+ ${ta("live","E-Invoice Live credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"..."}')}
+ ${ta("livew","E-Way Bill Live credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"...","EWBUserName":"...","EWBPassword":"..."}')}
  </div>
  <label>How to send the credentials</label><select style="max-width:300px" onchange="apiSetMode(this.value)"><option value="body" ${S.mode!=="headers"?"selected":""}>In the request body (top level)</option><option value="headers" ${S.mode==="headers"?"selected":""}>In the HTTP headers</option></select>
  <label>Test Buyer GSTIN for Sandbox (optional)</label><input style="max-width:300px" value="${esc(S.sbuyer||"")}" placeholder="A real party GSTIN is invalid in Sandbox" onchange="apiSetBuyer(this.value)">
