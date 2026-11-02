@@ -1417,7 +1417,7 @@ function render(){
  let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
  data.forEach((r,i)=>{
   html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(f.k==="alloc"?(r.alloc||[]).map(a=>a.inv).join(", "):val(f,r[f.k]))}</td>`).join("")+
-  `<td>${cur==="item"?`<button class="e" style="background:#6a4cd9" onclick="itemOf('${r.id}')">Ledger</button> `:""}<button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
+  `<td>${cur==="item"?`<button class="e" style="background:#6a4cd9" onclick="itemOf('${r.id}')">Ledger</button> `:""}${cur==="party"?`<button class="e" style="background:#087e8b" ${String(r.gstin||"").trim()?`onclick="validatePartyGstin('${r.id}')"`:"disabled title='पहले GSTIN भरें'"}>✓ Validate GSTIN</button> `:""}<button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
  });
  html+="</table>";
  if(m.tx||cur==="receipt"||cur==="payment"||cur==="journal"){
@@ -1467,12 +1467,18 @@ function blDraw(){
 }
 
 async function bulkGstinValidate(){
- const parties=DB.party.filter(p=>String(p.gstin||"").trim());
+ return runGstinValidation();
+}
+async function validatePartyGstin(id){
+ return runGstinValidation(id);
+}
+async function runGstinValidation(partyId){
+ const parties=DB.party.filter(p=>(!partyId||p.id===partyId)&&String(p.gstin||"").trim());
  if(!parties.length){alert("Party Master में GSTIN वाली कोई party नहीं मिली.");return}
  const C=apiCfg();let cr={};try{cr=JSON.parse(C.live||"{}")}catch(e){alert("Other → Webtel API Settings में E-Invoice Live credentials का JSON ठीक करें.");return}
  const cd=cr.CDKey||cr.Cdkey||cr.cdkey,efU=cr.EFUserName,efP=cr.EFPassword,eiU=cr.EInvUserName||cr.EInvoiceUserName,eiP=cr.EInvPassword||cr.EInvoicePassword;
  if(!cd||!efU||!efP||!eiU||!eiP){alert("Bulk GSTIN lookup के लिए E-Invoice Live credentials में CDKey, EFUserName, EFPassword, EInvUserName और EInvPassword भरें.");return}
- if(!confirm(parties.length+" GSTIN की Webtel LIVE lookup होगी. जारी रखें?"))return;
+ if(!confirm((partyId?"इस पार्टी का GSTIN":""+parties.length+" GSTIN")+" की Webtel LIVE lookup होगी. जारी रखें?"))return;
  const box=document.getElementById("gstin_bulk_result");if(box)box.innerHTML='<div class="empty">GSTIN जाँचे जा रहे हैं… कृपया पेज बंद न करें.</div>';
  let ok=0,fail=0,updated=0,rows=[];
  const first=(o,keys)=>{for(const k of keys){const v=findAny(o,k);if(v!=="")return String(v)}return ""};
@@ -1494,7 +1500,7 @@ async function bulkGstinValidate(){
   save();
  }
  render();
- const out=document.getElementById("gstin_bulk_result");if(out)out.innerHTML=`<div class="pan" style="margin:10px 0"><b>Bulk GSTIN Result</b><p>Checked: ${parties.length} &nbsp; Valid: ${ok} &nbsp; Failed: ${fail} &nbsp; Missing details updated: ${updated}</p>${tbl(["GSTIN","Result","Details"],rows)}</div>`;
+ const out=document.getElementById("gstin_bulk_result");if(out)out.innerHTML=`<div class="pan" style="margin:10px 0"><b>${partyId?"Single Party GSTIN Result":"Bulk GSTIN Result"}</b><p>Checked: ${parties.length} &nbsp; Valid: ${ok} &nbsp; Failed: ${fail} &nbsp; Missing details updated: ${updated}</p>${tbl(["GSTIN","Result","Details"],rows)}</div>`;
 }
 
 function openForm(id){
