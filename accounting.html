@@ -133,9 +133,10 @@ dialog::backdrop{background:#0006}
 .voucher-title{padding:15px 18px;border-bottom:1px solid #e1e5f0;font-weight:700}
 .voucher-grid{padding:16px 18px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .voucher-grid label{font-size:11px;font-weight:700;color:#475069;margin:0 0 6px}
-.voucher-grid input,.voucher-grid select{height:39px}
+.voucher-grid input,.voucher-grid select{height:39px}.voucher-grid select{background:#fff}.voucher-title{font-size:13px}
 .voucher-grid .wide{grid-column:1/-1}
 .voucher-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px;flex-wrap:wrap}
+.vno{display:flex;border:1px solid #cfd6ea;border-radius:8px;overflow:hidden;height:39px;background:#fff}.vno span{background:#eef1f7;padding:0 10px;display:flex;align-items:center;font-weight:700;font-size:13px}.vno input{border:0;flex:1;height:100%;min-width:0}.voucher-grid input.vamt{height:50px;font-size:20px;font-weight:800;color:#111a33}.voucher-grid input.vamt::placeholder{color:#a3acc0;font-weight:700}.voucher-actions button:last-child{padding:9px 16px}
 @media(max-width:760px){.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:440px){.voucher-grid{grid-template-columns:1fr}}
 label{display:block;font-size:13px;margin:10px 0 3px;color:#475069}
@@ -210,7 +211,7 @@ function regEdit(k,id){if(KC[k])regOpen(k,id);else recOpen(k,id)}
 function regDel(k,id){if(liveIrnLocked(k,id)){alert("Live E-Invoice generated. Delete is disabled for this invoice.");return}if(!confirm("Are you sure you want to delete this entry?"))return;DB[k]=DB[k].filter(x=>x.id!==id);save();render()}
 function regOpen(k,id){RS.back=KC[cur]?null:cur;cur=k;RS.sf=null;openSale(id)}
 function recOpen(k,id){RS.ret=cur;RS.newParty=null;RS.newItem=null;cur=k;render();openForm(id)}
-function go(k){cur=k;RS.sf=null;RS.back=null;render();openForm()}
+function go(k){cur=k;RS.sf=null;RS.vf=null;RS.back=null;render();openForm()}
 function renderTop(){
  const cs=DB.company,c=cs.find(x=>x.id===RS.company)||cs[0];
  let fy="";for(let y=FY0-3;y<=FY0+1;y++)fy+=`<option value="${y}" ${y===RS.fy?"selected":""}>${fyl(y)}</option>`;
@@ -231,7 +232,7 @@ const prevDay=d=>new Date(new Date(d+"T00:00:00Z").getTime()-864e5).toISOString(
 const r3=v=>Math.round(v*1000)/1000;
 const LED={sale:"dr",salereturn:"cr",purchase:"cr",purchasereturn:"dr",payment:"dr",receipt:"cr"};
 function entries(pid){const e=[];
- for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?+x.amount||0:0,cr:LED[k]==="cr"?+x.amount||0:0}));
+ for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?(+x.amount||0)+((k==="payment"&&+x.tds)||0):0,cr:LED[k]==="cr"?(+x.amount||0)+((k==="receipt"&&+x.tds)||0):0}));
  DB.journal.forEach(x=>{if(x.dr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:+x.amount||0,cr:0});if(x.cr===pid)e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:0,cr:+x.amount||0})});
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
@@ -487,7 +488,7 @@ function edocBuild(kind){
   return {it,hsn,l,q:+l.qty||0,rate:+l.rate||0,u:UQC[l.unit||it.unit]||"OTH",s:sp(l.tx)}});
  const T=sp(g.tax),rnd=+x.round||0,pd=+x.postDisc||0,inv=r2(g.tv+g.tax-pd+rnd),dsc=pd;
  let j;
- if(kind==="einv")j={Version:"1.1",TranDtls:{TaxSch:"GST",SupTyp:"B2B",RegRev:"N",IgstOnIntra:"N"},DocDtls:{Typ:"INV",No:no,Dt:fd(x.date)},
+ if(kind==="einv"){j={Version:"1.1",TranDtls:{TaxSch:"GST",SupTyp:"B2B",RegRev:"N",IgstOnIntra:"N"},DocDtls:{Typ:"INV",No:no,Dt:fd(x.date)},
   SellerDtls:{Gstin:c.gstin||"",LglNm:c.name||"",Addr1:c.address||"",Loc:c.city||"",Pin:pin(c.pin),Stcd:stc(c)},
   BuyerDtls:{Gstin:pt.gstin||"",LglNm:pt.name||"",Pos:pos,Addr1:pt.addr||"",Loc:pt.city||"",Pin:pin(pt.pin),Stcd:stc(pt)},
   ItemList:IL.map((o,i)=>({SlNo:String(i+1),PrdDesc:o.it.name||"",IsServc:"N",HsnCd:o.hsn,Qty:o.q,Unit:o.u,UnitPrice:o.rate,TotAmt:r2(o.q*o.rate),Discount:r2(Math.max(0,o.q*o.rate-o.l.t)),AssAmt:r2(o.l.t),GstRt:o.l.r,IgstAmt:r2(o.s.ig),CgstAmt:r2(o.s.cg),SgstAmt:r2(o.s.sg),TotItemVal:r2(o.l.t+o.l.tx)})),
@@ -498,6 +499,7 @@ function edocBuild(kind){
    if(!E.dist||+E.dist<=0)need(true,"E-Way Bill Distance (km) must be greater than zero");
    if(!E.veh&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
   }
+ }
  else{const E=RS.ew;j={supplyType:"O",subSupplyType:"1",docType:"INV",docNo:no,docDate:fd(x.date),
   fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:c.address||"",fromPlace:c.city||"",fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
   toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:pt.addr||"",toPlace:pt.city||"",toPincode:pin(pt.pin),toStateCode:+pos||0,actToStateCode:+pos||0,
@@ -633,7 +635,7 @@ function coLoad(id){
 }
 function coPick(id){
  if(id===DB.activeCo)return;
- coStash();coLoad(id);RS.sf=null;RS.back=null;save();render();
+ coStash();coLoad(id);RS.sf=null;RS.vf=null;RS.back=null;save();render();
 }
 function coEnsure(){
  if(DB.company.some(c=>c.id===DB.activeCo)){RS.company=DB.activeCo;return}
@@ -1366,7 +1368,7 @@ function buildNav(){
  $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks])=>`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>").join("");
  $("nav").querySelectorAll(".gh").forEach(h=>h.onclick=()=>{OPEN[h.dataset.g]=!OPEN[h.dataset.g];buildNav()});
  $("nav").querySelectorAll("a[data-p]").forEach(a=>a.onclick=()=>{OPEN[a.dataset.p]=!OPEN[a.dataset.p];buildNav()});
- $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.back=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
+ $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.back=null;RS.vf=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
 }
 
 function stockSummary(){
@@ -1382,6 +1384,7 @@ function stockSummary(){
 
 function render(){
  coEnsure();
+ if(RS.vf&&RS.vf.k!==cur)RS.vf=null;
  if(RS.lastCur!==cur){RS.lastCur=cur;GROUPS.forEach(([g,,ks])=>{if(ks.includes(cur))OPEN[g]=true});Object.keys(CH).forEach(q=>{if(CH[q].includes(cur)){OPEN[q]=true;GROUPS.forEach(([g,,ks])=>{if(ks.includes(q))OPEN[g]=true})}})}
  buildNav();renderTop();
  const isR=!!R[cur],dash=cur==="dashboard";
@@ -1405,6 +1408,7 @@ function render(){
   }
   return}
  if(KC[cur]){renderSale();return}
+ if(VK[cur]&&RS.vf){renderVoucher();return}
  const m=M[cur];
  $("ttl").textContent=m.title;
  $("extra").innerHTML=cur==="stock"?stockSummary():(cur==="party"?`<div class="ctl" style="margin:10px 0"><button onclick="bulkGstinValidate()">✓ Bulk GSTIN Validate &amp; Auto Update</button><span style="font-size:12px;color:#6b7690">GSTIN वाली सभी पार्टियों की जाँच; केवल खाली विवरण भरे जाएँगे.</span></div><div id="gstin_bulk_result"></div>`:"");
@@ -1441,7 +1445,7 @@ function pendBills(kind,party,skipId){
    const c=a.id?bills.filter(z=>z.id===a.id):bills.filter(z=>a.inv&&z.inv===String(a.inv));
    for(const b of c){const u=Math.min(v,Math.max(b.total-b.paid,0));b.paid+=u;v-=u;if(v<=0.005)break}
    pool+=Math.max(v,0)});
-  pool+=Math.max((+r.amount||0)-al,0);
+  pool+=Math.max((+r.amount||0)+(+r.tds||0)-al,0);
  });
  DB[rk].filter(r=>r.party===party).forEach(r=>{pool+=+r.amount||0});
  DB.journal.forEach(j=>{if((kind==="receipt"?j.cr:j.dr)===party)pool+=+j.amount||0});
@@ -1454,7 +1458,7 @@ function blLoad(init){
  if(init)(init.alloc||[]).forEach(a=>{const b=L.find(z=>(a.id&&z.id===a.id)||(!a.id&&a.inv&&z.inv===String(a.inv)));if(b)sel[b.id]=Math.min(+a.amount||0,b.pend)});
  RS.bl={sel,list:L};blDraw();
 }
-function blSync(){const S=RS.bl.sel;if(Object.keys(S).length)$("f_amount").value=r2(Object.values(S).reduce((a,v)=>a+v,0))}
+function blSync(){const S=RS.bl.sel;if(Object.keys(S).length)$("f_amount").value=Math.max(r2(Object.values(S).reduce((a,v)=>a+v,0)-(+(($("f_tds")||{}).value)||0)),0)}
 function blTick(id,on){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;if(on)RS.bl.sel[id]=b.pend;else delete RS.bl.sel[id];blSync();blDraw()}
 function blAmt(id,v){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;RS.bl.sel[id]=Math.min(Math.max(+v||0,0),b.pend);blSync();blDraw()}
 function blDraw(){
@@ -1463,7 +1467,7 @@ function blDraw(){
  if(!$("f_party").value){el.innerHTML="";return}
  if(!L.length){el.innerHTML='<div class="bnote" style="margin-top:12px">No pending bills for this party.</div>';return}
  const tot=Object.values(S).reduce((a,v)=>a+v,0);
- el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${b.date}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)}</div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
+ el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${b.date}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)} <small style="color:#6b7690">(Amount + TDS)</small></div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
 }
 
 async function bulkGstinValidate(){
@@ -1505,6 +1509,7 @@ async function runGstinValidation(partyId){
 
 function openForm(id){
  if(KC[cur]){openSale(id);return}
+ if(VK[cur]){openVoucher(id);return}
  editId=id||null;
  const m=M[cur],rec=id?DB[cur].find(x=>x.id===id):{};
  $("dt").textContent=(id?"Edit ":"New ")+m.title;
@@ -1560,18 +1565,66 @@ function openForm(id){
  $("dlg").showModal();
 }
 
-function clearVoucher(){
- ["number","date","party","account","amount","tds","remark"].forEach(k=>{const e=$("f_"+k);if(e)e.value=k==="date"?today():k==="account"?"Cash Account":k==="number"?(cur==="receipt"?"REC-":"PAY-")+String(DB[cur].length+1).padStart(3,"0"):""});
+/* ===== Receipt / Payment voucher (full page) ===== */
+const VK={receipt:1,payment:1};
+RS.vf=null;
+const vNum=s=>String(s||"").replace(/^\D*/,"");
+const vNext=k=>{const re=new RegExp("^"+(k==="receipt"?"REC":"PAY")+"-(\\d+)$","i");return String((DB[k]||[]).reduce((mx,x)=>{const m=re.exec(String(x.number||"").trim());return m?Math.max(mx,+m[1]):mx},0)+1)};
+function openVoucher(id){
+ const rec=id?DB[cur].find(x=>x.id===id):null;
+ editId=id||null;RS.vf={k:cur,id:id||null,rec:rec||{}};render();
+}
+function renderVoucher(){
+ const k=cur,m=M[k],rec=RS.vf.rec,isR=k==="receipt",C=comp()||{};
+ $("ttl").textContent=m.title;$("extra").innerHTML="";$("list").className="";
+ const pre=rec.number&&/^\D+/.test(String(rec.number))?String(rec.number).match(/^\D+/)[0]:(isR?"REC-":"PAY-");
+ const no=rec.number?vNum(rec.number):vNext(k);
+ const acc=rec.account||(rec.mode&&rec.mode!=="Cash"?"Bank Account":"Cash Account");
+ const accs=["Cash Account","Bank Account"];if(acc&&!accs.includes(acc))accs.push(acc);
+ const lab=(t,r)=>`<label>${t}${r?" *":""}</label>`;
+ $("list").innerHTML=`<div class="voucher-head"><div class="vicon">▣</div><div><div style="font-size:16px;font-weight:600">${m.title}</div><div style="font-size:11px;color:#6b7690">${esc(C.name||"")}${C.name?" • ":""}${isR?"Cash/Bank transaction entry":"Cash/Bank payment entry"}</div></div></div>
+ <div class="voucher-card"><div class="voucher-title">${isR?"Receipt":"Payment"} Details</div><div class="voucher-grid">
+ <div>${lab("Voucher No.")}<div class="vno"><span id="f_pre">${esc(pre)}</span><input id="f_vno" value="${esc(no)}"></div></div>
+ <div>${lab("Date")}<input id="f_date" type="date" value="${esc(rec.date||today())}"></div>
+ <div>${lab(isR?"Received From Party":"Paid To Party",1)}<select id="f_party"><option value="">Select party</option>${DB.party.map(o=>`<option value="${o.id}" ${o.id===rec.party?"selected":""}>${esc(o.name)}</option>`).join("")}</select></div>
+ <div>${lab(isR?"Received In":"Paid From")}<select id="f_account">${accs.map(a=>`<option ${a===acc?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
+ <div>${lab(isR?"Received Amount (₹)":"Payment Amount (₹)",1)}<input id="f_amount" class="vamt" type="number" step="any" placeholder="0.00" value="${esc(rec.amount??"")}"></div>
+ <div>${lab("TDS Deducted (₹)")}<input id="f_tds" class="vamt" type="number" step="any" placeholder="0.00" value="${esc(rec.tds||"")}" onchange="blSync()"></div>
+ <div class="wide">${lab("Narration / Remarks")}<textarea id="f_remark" rows="3" placeholder="${isR?"Receipt":"Payment"} details...">${esc(rec.remark||"")}</textarea></div></div>
+ <div id="bills" style="padding:0 18px 8px"></div>
+ <div class="voucher-actions"><button type="button" style="background:#fff;color:#111a33;border:1px solid #111a33" onclick="voucherClear()">Clear</button><button type="button" style="background:#fff;color:#111a33;border:1px solid #111a33" onclick="voucherPrint()">🖶 Print / Export</button><button type="button" style="background:#16905a" onclick="voucherSave()">▣ Save ${isR?"Receipt":"Payment"} (F2)</button></div></div>`;
+ blLoad(RS.vf.id?rec:null);
+ setTimeout(()=>{const e=$(RS.vf&&RS.vf.id?"f_amount":"f_party");if(e&&e.focus)e.focus()},50);
+}
+function voucherClear(){
+ const k=cur,set=(id,v)=>{const e=$(id);if(e)e.value=v};
+ set("f_vno",vNext(k));set("f_date",today());set("f_party","");set("f_account","Cash Account");set("f_amount","");set("f_tds","");set("f_remark","");
  RS.bl={sel:{},list:[]};blDraw();
 }
-function printVoucher(){
- const title=cur==="receipt"?"Receipt Voucher":"Payment Voucher";
- const labels=[["Voucher No.",$("f_number")?.value],["Date",$("f_date")?.value],["Party",lookup("party",$("f_party")?.value)],["Account",$("f_account")?.value],["Amount","₹ "+n2($("f_amount")?.value)],["TDS Deducted","₹ "+n2($("f_tds")?.value)],["Narration",$("f_remark")?.value]];
- const w=window.open("","_blank","width=800,height=650");
- if(!w){alert("Please allow pop-ups to print/export this voucher.");return}
- w.document.write("<html><head><title>"+title+"</title><style>body{font:14px Arial;padding:30px}h2{margin-bottom:25px}table{width:100%;border-collapse:collapse}td{padding:12px;border:1px solid #ddd}td:first-child{font-weight:bold;width:30%}</style></head><body><h2>"+title+"</h2><table>"+labels.map(x=>"<tr><td>"+x[0]+"</td><td>"+String(x[1]||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))+"</td></tr>").join("")+"</table><script>window.onload=()=>window.print()<\/script></body></html>");
- w.document.close();
+function voucherData(){
+ const v=id=>($(id)||{}).value||"",k=cur;
+ return {pre:($("f_pre")||{}).textContent||(k==="receipt"?"REC-":"PAY-"),no:v("f_vno").trim(),date:v("f_date"),party:v("f_party"),account:v("f_account"),amount:+v("f_amount")||0,tds:+v("f_tds")||0,remark:v("f_remark").trim()};
 }
+function voucherPrint(){
+ const d=voucherData(),k=cur,C=comp()||{},title=k==="receipt"?"Receipt Voucher":"Payment Voucher",S=RS.bl.sel,al=RS.bl.list.filter(b=>S[b.id]>0);
+ const rows=[["Voucher No.",d.pre+(d.no||vNext(k))],["Date",fd(d.date)],[k==="receipt"?"Received From":"Paid To",lookup("party",d.party)],[k==="receipt"?"Received In":"Paid From",d.account],["Amount","₹ "+inr2(d.amount)],["TDS Deducted","₹ "+inr2(d.tds)],["Total (Amount + TDS)","₹ "+inr2(d.amount+d.tds)],["Amount in words",inrWords(d.amount)],["Bills settled",al.map(b=>b.inv+" (₹ "+inr2(S[b.id])+")").join(", ")],["Narration",d.remark]];
+ prOpen(title+" "+d.pre+d.no,`<div style="padding:18px"><div style="text-align:center;font-size:18px;font-weight:bold">${esc(C.name||"")}</div><div style="text-align:center;font-size:11px;margin-bottom:12px">${esc(prCompany().addr)}${C.gstin?" • GSTIN: "+esc(C.gstin):""}</div><h2 style="text-align:center;margin:6px 0 14px;text-decoration:underline">${title}</h2><table style="width:100%;border-collapse:collapse">${rows.map(r=>`<tr><td style="padding:9px;border:1px solid #999;width:30%;font-weight:bold">${r[0]}</td><td style="padding:9px;border:1px solid #999">${esc(r[1]||"")}</td></tr>`).join("")}</table><div style="display:flex;justify-content:space-between;margin-top:60px"><div>Receiver's Signature</div><div style="font-weight:bold">${esc(prCompany().label)}</div></div></div>`);
+}
+function voucherSave(){
+ const d=voucherData(),k=cur,id=RS.vf&&RS.vf.id,old=id?DB[k].find(x=>x.id===id):null;
+ if(!d.date){alert("Date is required");return}
+ if(!d.party){alert((k==="receipt"?"Received From Party":"Paid To Party")+" is required");return}
+ if(!(d.amount>0)){alert((k==="receipt"?"Received":"Payment")+" Amount is required");return}
+ const S=RS.bl.sel,al=RS.bl.list.filter(b=>S[b.id]>0).map(b=>({id:b.id,inv:b.inv,amount:r2(S[b.id])})),t=al.reduce((a,x)=>a+x.amount,0);
+ if(t>d.amount+d.tds+0.005){alert("Selected bills total (₹ "+n2(t)+") is more than Amount + TDS (₹ "+n2(d.amount+d.tds)+")");return}
+ const number=d.pre+(d.no||vNext(k));
+ if(DB[k].some(x=>x.id!==id&&String(x.number||"")===number)){alert("Voucher No. "+number+" already exists");return}
+ const mode=old&&old.account===d.account&&old.mode?old.mode:(/^cash/i.test(d.account)?"Cash":"Bank");
+ const rec={number,date:d.date,party:d.party,account:d.account,mode,amount:d.amount,tds:d.tds,remark:d.remark,alloc:al};
+ if(old){const i=DB[k].findIndex(x=>x.id===id);DB[k][i]={...old,...rec}}else DB[k].push({id:uid(),...rec});
+ save();RS.vf=null;render();
+}
+
 function saveForm(){
  const m=M[cur],rec={};
  for(const f of m.f){
@@ -1609,8 +1662,8 @@ function del(id){
  save();render();
 }
 
-$("add").onclick=()=>{if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
-document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}});
+$("add").onclick=()=>{if(VK[cur]&&RS.vf){RS.vf=null;render();return}if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
+document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}if(e.key==="F2"&&VK[cur]&&RS.vf){e.preventDefault();voucherSave()}});
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
 $("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty,ni=RS.newItem;RS.ret=null;RS.newParty=null;RS.newItem=null;cur=k;render();if(np&&RS.sf)sfParty(np);if(ni&&RS.sf)sfItemNew(ni)}});
