@@ -481,18 +481,20 @@ function edocBuild(kind){
 }
 function edocDl(kind){const r=edocBuild(kind);if(r)dl((kind==="einv"?"einvoice_":"ewaybill_")+r.no+".json",JSON.stringify(r.j,null,2),"application/json")}
 function edocCp(kind){const r=edocBuild(kind);if(r)cpTxt(JSON.stringify(r.j,null,2))}
-async function einvoiceBill(id){
- RS.es=id;RS.api.act="gen";const check=edocBuild("einv");
- if(check&&check.iss.length){render();alert("Please complete the selected bill details first:\n\n"+check.iss.join("\n"));return;}
- RS.api.body=JSON.stringify(apiTpl("einv","gen"),null,2);render();await apiSend("einv",0);
+async function edocBill(kind,live,id){
+ RS.es=id;RS.api.act=kind==="einv"?"gen2":"gen";
+ const check=edocBuild(kind),iss=check?check.iss.filter(i=>!/^Note:/.test(i)):[];
+ if(iss.length){render();alert("Please complete the selected bill details first:\n\n"+iss.join("\n"));return}
+ render();RS.api.body=apiBodyFor(kind,live);await apiSend(kind,live);
 }
+const einvoiceBill=id=>edocBill("einv",0,id);
 function edocPage0(kind,live){
  if(!DB.sale.length)return '<div class="empty">Create a Sale Entry first</div>';
  const x0=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];RS.es=x0.id;
  const E=RS.ew,inp=(k,l,w)=>`<div style="min-width:${w||140}px"><label>${l}</label><input value="${esc(E[k])}" onchange="RS.ew.${k}=this.value;render()"></div>`;
  const bills=`<div style="margin:0 14px 14px;padding:14px;border:1px solid #d8def0;border-radius:10px;background:#fff">
  <b style="font-size:16px">${kind==="einv"?"Select Sale Bill for E-Invoice":"Select Sale Bill for E-Way Bill"}</b>
- <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='gen';render()">${s.id===RS.es?"Selected":"Select"}</button> ${kind==="einv"&&!live?`<button onclick="einvoiceBill('${s.id}')">Generate E-Invoice</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`;
+ <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${kind==="einv"?(s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"):(s.ewbNumber?"<span style='color:#14803c'>EWB saved</span>":"Pending")}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='${kind==="einv"?"gen2":"gen"}';render()">${s.id===RS.es?"Selected":"Select"}</button> <button onclick="edocBill('${kind}',${live?1:0},'${s.id}')">Generate ${kind==="einv"?"E-Invoice":"E-Way Bill"}</button></td></tr>`).join("")}</tbody></table></div></div>`;
  const ctl=`<div class="ctl"><div style="min-width:260px"><label>Selected Sale Entry</label><input readonly value="${esc(docNo("sale",x0))} • ${esc(lookup("party",x0.party))} • ₹${n2(x0.amount)}"></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
  const r=edocBuild(kind),url=PORT[kind][live?"live":"sand"],nm=kind==="einv"?"E-Invoice":"E-Way Bill";
  const warn=r.iss.length?`<div style="margin:0 14px;padding:10px 14px;background:#fff4de;border-radius:8px;font-size:13px"><b>Please fill in / check these details:</b><br>• ${r.iss.map(esc).join("<br>• ")}</div>`:`<div style="margin:0 14px;padding:10px 14px;background:#e3f7ec;border-radius:8px;font-size:13px">✔ All required details are present</div>`;
@@ -531,11 +533,16 @@ function apiTpl(kind,act){
 }
 function fany(o,k){if(o&&typeof o==="object"){if(k in o&&o[k]!==null&&typeof o[k]!=="object")return o[k];for(const v of Object.values(o)){const r=fany(v,k);if(r!=="")return r}}return ""}
 function findKey(o,k){if(o&&typeof o==="object"){if(k in o&&typeof o[k]==="string")return o[k];for(const v of Object.values(o)){const r=findKey(v,k);if(r)return r}}return ""}
+function apiBodyFor(kind,live){
+ const C0=apiCfg(),cr0=credEff(kind,live),T0=apiTpl(kind,RS.api.act);
+ return JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...cr0,...T0},null,2);
+}
 function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
+ if(a.pk!==kind+e){a.pk=kind+e;a.act=kind==="einv"?"gen2":"gen"}
  if(!L.some(z=>z[0]===a.act))a.act="gen";
  const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
- if(a.sig!==sig){a.sig=sig;const T0=apiTpl(kind,a.act);a.body=JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...cr0,...T0},null,2)}
+ if(a.sig!==sig){a.sig=sig;a.body=apiBodyFor(kind,live)}
  const act=L.find(z=>z[0]===a.act);
  return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
  <b>⚡ Webtel API (${live?"Live":"Sandbox"})</b>
