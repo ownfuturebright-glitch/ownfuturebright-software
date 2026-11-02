@@ -1069,7 +1069,7 @@ function saleFromRec(x){
  return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:(x.discMode&&+x.invDisc>0)?x.discMode:"post",
   items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
-function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.sf=x?saleFromRec(x):newSaleForm();render()}
+function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);if(x&&cur==="sale"&&x.irn){alert("इस Invoice का E-Invoice (IRN) बन चुका है। अब इसे Edit नहीं किया जा सकता।");return}RS.sf=x?saleFromRec(x):newSaleForm();render()}
 function sfCompute(){
  const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp()),post=f.dmode!=="pre";
  const pre=f.items.map(l=>{const gross=(+l.qty||0)*(+l.rate||0),d=gross*(+l.disc||0)/100;return {d,t0:gross-d}});
@@ -1122,7 +1122,7 @@ function sfBuild(){
  return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,discMode:f.dmode==="pre"?"pre":"post",invDisc:r2(m.idisc),postDisc:r2(m.idPost),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
 }
 function saleSave(){
- const f=RS.sf;if(!f)return;const rec=sfBuild();
+ const f=RS.sf;if(!f)return; if(cur==="sale"&&f.id&&DB.sale.some(x=>x.id===f.id&&x.irn)){alert("इस Invoice का E-Invoice (IRN) बन चुका है। Edit/Save बंद है।");RS.sf=null;render();return} const rec=sfBuild();
  if(!String(f.no).trim()){alert(KC[cur].no+" is required");return}
  if(!f.date){alert("Date is required");return}
  if(!f.party){alert("Please select a party");return}
@@ -1323,7 +1323,7 @@ function renderSale(){
   const l=DB[cur].filter(x=>!q||(String(x.inv||"")+" "+lookup("party",x.party)).toLowerCase().includes(q)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
   let tot=0;
   const rows=l.map((x,i)=>{const g=gstCalc(x),t=x.taxable!==undefined?+x.amount:g.tot;tot+=t;
-   return [i+1,esc(x.inv||docNo(cur,x)),x.date,esc(lookup("party",x.party)),lines(x).length,n2(g.tv),n2(g.tax),n2(t),`<button class="e" onclick="openSale('${x.id}')">Edit</button> <button class="e" style="background:#8a94a8" onclick="salePrintId('${x.id}')">Print</button> <button class="d" onclick="del('${x.id}')">Delete</button>`]});
+   const locked=cur==="sale"&&!!x.irn; return [i+1,esc(x.inv||docNo(cur,x)),x.date,esc(lookup("party",x.party)),lines(x).length,n2(g.tv),n2(g.tax),n2(t),`${locked?`<button class="e" disabled title="E-Invoice generated; locked" style="opacity:.45;cursor:not-allowed">🔒 Locked</button>`:`<button class="e" onclick="openSale('${x.id}')">Edit</button> <button class="d" onclick="del('${x.id}')">Delete</button>`} <button class="e" style="background:#8a94a8" onclick="salePrintId('${x.id}')">Print</button>`]});
   $("list").innerHTML=tbl(["#",K.no.replace(".",""),"Date",K.pl.replace(" Name",""),"Items","Taxable","GST","Total","Action"],rows,`Invoices: ${l.length} &nbsp; Total: ₹ ${n2(tot)}`);
   return;
  }
@@ -1582,6 +1582,7 @@ function saveForm(){
 
 function del(id){
  if(cur==="company"){coDel(id);return}
+ if(cur==="sale"&&DB.sale.some(x=>x.id===id&&x.irn)){alert("इस Invoice का E-Invoice (IRN) बन चुका है। इसे Delete नहीं किया जा सकता।");return}
  if(!confirm("Are you sure you want to delete this record?"))return;
  if(cur==="party"||cur==="item"){
   const used=Object.keys(M).some(k=>k!==cur&&DB[k].some(r=>r.party===id||r.item===id||r.dr===id||r.cr===id||(r.items||[]).some(l=>l.item===id)));
