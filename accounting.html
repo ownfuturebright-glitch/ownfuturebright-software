@@ -127,6 +127,17 @@ td{padding:8px 10px;border-top:1px solid #eceff5}
 .empty{padding:24px;text-align:center;color:#8a94a8}
 dialog{border:0;border-radius:10px;padding:20px;width:min(460px,94vw);box-shadow:0 8px 30px #0005}
 dialog::backdrop{background:#0006}
+.voucher-head{background:#fff;border:1px solid #e1e5f0;border-radius:13px;padding:18px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.voucher-head .vicon{width:40px;height:40px;border-radius:10px;background:#e8edff;color:#315bff;display:grid;place-items:center;font-size:20px}
+.voucher-card{background:#fff;border:1px solid #e1e5f0;border-radius:13px;overflow:hidden}
+.voucher-title{padding:15px 18px;border-bottom:1px solid #e1e5f0;font-weight:700}
+.voucher-grid{padding:16px 18px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.voucher-grid label{font-size:11px;font-weight:700;color:#475069;margin:0 0 6px}
+.voucher-grid input,.voucher-grid select{height:39px}
+.voucher-grid .wide{grid-column:1/-1}
+.voucher-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px;flex-wrap:wrap}
+@media(max-width:760px){.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:440px){.voucher-grid{grid-template-columns:1fr}}
 label{display:block;font-size:13px;margin:10px 0 3px;color:#475069}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .tot{padding:10px;text-align:right;font-weight:600}
@@ -157,8 +168,8 @@ const M={
  stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
  sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Sale Return"), purchasereturn:tx("Purchase Return"),
  po:{title:"Purchase Order",tx:1,f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Supplier",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"status",l:"Status",opts:["Pending","Received","Cancelled"]},{k:"remark",l:"Remark"}]},
- receipt:{title:"Receipt Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Party",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"mode",l:"Mode",opts:["Cash","Bank","UPI","Cheque"]},{k:"remark",l:"Remark"}]},
- payment:{title:"Payment Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Party",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"mode",l:"Mode",opts:["Cash","Bank","UPI","Cheque"]},{k:"remark",l:"Remark"}]},
+ receipt:{title:"Receipt Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Received From Party",src:"party",r:1},{k:"account",l:"Received In",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Received Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
+ payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  journal:{title:"Journal Voucher",f:[{k:"date",l:"Date",t:"date",r:1},{k:"dr",l:"Debit Account (Party)",src:"party",r:1},{k:"cr",l:"Credit Account (Party)",src:"party",r:1},{k:"amount",l:"Amount",t:"number",r:1},{k:"remark",l:"Narration"}]}
 };
 const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
@@ -1442,17 +1453,40 @@ function openForm(id){
  editId=id||null;
  const m=M[cur],rec=id?DB[cur].find(x=>x.id===id):{};
  $("dt").textContent=(id?"Edit ":"New ")+m.title;
- $("frm").innerHTML=m.f.map(f=>{
-  const v=rec[f.k]??(f.t==="date"?today():"");
-  let inp;
-  if(f.src){
-   inp=`<select id="f_${f.k}"><option value="">-- Select --</option>`+DB[f.src].map(o=>`<option value="${o.id}" ${o.id===v?"selected":""}>${esc(o.name)}</option>`).join("")+"</select>";
-  }else if(f.opts){
-   inp=`<select id="f_${f.k}">`+f.opts.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")+"</select>";
-  }else if(f.t==="textarea"){inp=`<textarea id="f_${f.k}" rows="2">${esc(v)}</textarea>`}
-  else inp=`<input id="f_${f.k}" type="${f.t||"text"}" ${f.t==="number"?'step="any"':""} value="${esc(v)}">`;
-  return `<label>${f.l}${f.r?" *":""}</label>${inp}`;
- }).join("")+(m.tx?'<div class="tot" id="amt"></div>':"")+((cur==="receipt"||cur==="payment")?'<div id="bills"></div>':"");
+ if(cur==="receipt"||cur==="payment"){
+  const prefix=cur==="receipt"?"REC":"PAY";
+  const nextNo=()=>prefix+"-"+String((DB[cur]||[]).reduce((mx,x)=>Math.max(mx,parseInt(String(x.number||"").replace(/^.*?-/,""),10)||0),0)+(id?0:1)).padStart(3,"0");
+  const account=rec.account||(rec.mode&&rec.mode!=="Cash"?"Bank Account":"Cash Account");
+  const fields=[
+   ["number","Voucher No.",rec.number||nextNo(),"text"],
+   ["date","Date",rec.date||today(),"date"],
+   ["party",cur==="receipt"?"Received From Party *":"Paid To Party *",rec.party||"","party"],
+   ["account",cur==="receipt"?"Received In":"Paid From",account,"account"],
+   ["amount",cur==="receipt"?"Received Amount (₹) *":"Payment Amount (₹) *",rec.amount??"","number"],
+   ["tds","TDS Deducted (₹)",rec.tds??"","number"]
+  ];
+  const fieldHtml=fields.map(([k,l,v,t])=>{
+   let el=t==="party"?'<select id="f_party"><option value="">Select party</option>'+DB.party.map(o=>`<option value="${o.id}" ${o.id===v?"selected":""}>${esc(o.name)}</option>`).join("")+'</select>':
+    t==="account"?'<select id="f_account"><option '+(v==="Cash Account"?"selected":"")+' value="Cash Account">Cash Account</option><option '+(v==="Bank Account"?"selected":"")+' value="Bank Account">Bank Account</option></select>':
+    `<input id="f_${k}" type="${t}" ${t==="number"?'step="any"':''} value="${esc(v)}">`;
+   return `<div><label>${l}</label>${el}</div>`;
+  }).join("");
+  $("frm").innerHTML=`<div class="voucher-head"><div class="vicon">▣</div><div><div style="font-size:15px;font-weight:600">${m.title}</div><div style="font-size:11px;color:#6b7690">${cur==="receipt"?"Cash/Bank transaction entry":"Cash/Bank payment entry"}</div></div></div><div class="voucher-card"><div class="voucher-title"> ${cur==="receipt"?"Receipt":"Payment"} Details</div><div class="voucher-grid">${fieldHtml}<div class="wide"><label>Narration / Remarks</label><textarea id="f_remark" rows="3" placeholder="Enter details...">${esc(rec.remark||"")}</textarea></div></div><div id="bills" style="padding:0 18px"></div><div class="voucher-actions"><button type="button" class="g" onclick="clearVoucher()">Clear</button><button type="button" style="background:#fff;color:#111a33;border:1px solid #111a33" onclick="printVoucher()">▣ Print / Export</button></div></div>`;
+  $("sv").textContent=cur==="receipt"?"▣ Save Receipt (F2)":"▣ Save Payment (F2)";
+ }else{
+  $("frm").innerHTML=m.f.map(f=>{
+   const v=rec[f.k]??(f.t==="date"?today():"");
+   let inp;
+   if(f.src){
+    inp=`<select id="f_${f.k}"><option value="">-- Select --</option>`+DB[f.src].map(o=>`<option value="${o.id}" ${o.id===v?"selected":""}>${esc(o.name)}</option>`).join("")+"</select>";
+   }else if(f.opts){
+    inp=`<select id="f_${f.k}">`+f.opts.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")+"</select>";
+   }else if(f.t==="textarea"){inp=`<textarea id="f_${f.k}" rows="2">${esc(v)}</textarea>`}
+   else inp=`<input id="f_${f.k}" type="${f.t||"text"}" ${f.t==="number"?'step="any"':""} value="${esc(v)}">`;
+   return `<label>${f.l}${f.r?" *":""}</label>${inp}`;
+  }).join("")+(m.tx?'<div class="tot" id="amt"></div>':"");
+  $("sv").textContent="Save";
+ }
  $("dlg").style.width=(cur==="receipt"||cur==="payment")?"min(720px,95vw)":"";
  if(cur==="receipt"||cur==="payment"){$("f_party").onchange=()=>blLoad();blLoad(id?rec:null)}
  if(m.tx){
@@ -1471,14 +1505,32 @@ function openForm(id){
  $("dlg").showModal();
 }
 
+function clearVoucher(){
+ ["number","date","party","account","amount","tds","remark"].forEach(k=>{const e=$("f_"+k);if(e)e.value=k==="date"?today():k==="account"?"Cash Account":k==="number"?(cur==="receipt"?"REC-":"PAY-")+String(DB[cur].length+1).padStart(3,"0"):""});
+ RS.bl={sel:{},list:[]};blDraw();
+}
+function printVoucher(){
+ const title=cur==="receipt"?"Receipt Voucher":"Payment Voucher";
+ const labels=[["Voucher No.",$("f_number")?.value],["Date",$("f_date")?.value],["Party",lookup("party",$("f_party")?.value)],["Account",$("f_account")?.value],["Amount","₹ "+n2($("f_amount")?.value)],["TDS Deducted","₹ "+n2($("f_tds")?.value)],["Narration",$("f_remark")?.value]];
+ const w=window.open("","_blank","width=800,height=650");
+ if(!w){alert("Please allow pop-ups to print/export this voucher.");return}
+ w.document.write("<html><head><title>"+title+"</title><style>body{font:14px Arial;padding:30px}h2{margin-bottom:25px}table{width:100%;border-collapse:collapse}td{padding:12px;border:1px solid #ddd}td:first-child{font-weight:bold;width:30%}</style></head><body><h2>"+title+"</h2><table>"+labels.map(x=>"<tr><td>"+x[0]+"</td><td>"+String(x[1]||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))+"</td></tr>").join("")+"</table><script>window.onload=()=>window.print()<\/script></body></html>");
+ w.document.close();
+}
 function saveForm(){
  const m=M[cur],rec={};
  for(const f of m.f){
-  const v=$("f_"+f.k).value.trim();
+  const el=$("f_"+f.k); if(!el)continue;
+  const v=el.value.trim();
   if(f.r&&!v){alert(f.l+" is required");return}
   rec[f.k]=v;
  }
  if(cur==="receipt"||cur==="payment"){
+  rec.mode=rec.account==="Cash Account"?"Cash":"Bank";
+  rec.tds=+rec.tds||0;
+  rec.number=rec.number||((cur==="receipt"?"REC-":"PAY-")+String(DB[cur].length+1).padStart(3,"0"));
+  rec.remark=rec.remark||"";
+ 
   const S=RS.bl.sel,al=RS.bl.list.filter(b=>S[b.id]>0).map(b=>({id:b.id,inv:b.inv,amount:r2(S[b.id])})),t=al.reduce((a,x)=>a+x.amount,0);
   if(t>(+rec.amount||0)+0.005){alert("Selected bills total (₹ "+n2(t)+") is more than the Amount");return}
   rec.alloc=al;
