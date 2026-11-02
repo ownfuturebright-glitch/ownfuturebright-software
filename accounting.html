@@ -163,7 +163,7 @@ const tx=(t)=>({title:t,tx:1,f:[
  {k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"remark",l:"Remark"}]});
 const M={
  company:{title:"Company Master",f:[{k:"name",l:"Company Name",r:1},{k:"gstin",l:"GSTIN"},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"address",l:"Address",t:"textarea"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"}]},
- party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"cash",l:"Cash Party (not shown in Outstanding)",opts:["No","Yes"]},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
+ party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"cash",l:"Cash Party (not shown in Outstanding)",opts:["No","Yes"]},{k:"phone",l:"Phone"},{k:"vehicle",l:"Vehicle Number"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
  item:{title:"Item Master",f:[{k:"name",l:"Item Name",r:1},{k:"code",l:"Item Code"},{k:"unit",l:"Unit",opts:UNITS},{k:"srate",l:"Sale Rate",t:"number"},{k:"prate",l:"Purchase Rate",t:"number"},{k:"openq",l:"Opening Stock Qty",t:"number"},{k:"minq",l:"Low Stock Limit (Qty, blank = 10)",t:"number"},{k:"roq",l:"Reorder Qty (Auto PO)",t:"number"},{k:"supp",l:"Default Supplier (Auto PO)",src:"party"},{k:"hsn",l:"HSN Code"},{k:"gst",l:"GST %",t:"number"}]},
  stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
  sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Sale Return"), purchasereturn:tx("Purchase Return"),
@@ -460,7 +460,7 @@ R.payremind={t:"Payment Reminder",f(){
  const ctl=`<div style="padding:14px"><label style="margin-top:0">Message ({name}, {amount} and {company} are filled in automatically)</label><textarea rows="3" oninput="RS.rmsg=this.value">${esc(RS.rmsg)}</textarea></div>`;
  return ctl+tbl(["Party","Phone","City","Outstanding (Dr)","Reminder"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(b),`<button class="e" style="background:#25a244" onclick="wa('${p.id}')">WhatsApp</button> <button class="e" style="background:#8a94a8" onclick="cpRem('${p.id}')">Copy</button>`]),`Total outstanding: ₹ ${n2(l.reduce((a,[p,b])=>a+b,0))}`)}};
 
-RS.ew={dist:"0",veh:"",tname:"",tid:""};
+RS.ew={dist:"0",veh:"",tname:"",tid:"",einvEwb:false,transMode:"1",transDocNo:"",transDocDt:"",vehType:"R"};
 const PORT={einv:{live:"https://einvoice1.gst.gov.in/",sand:"https://einv-apisandbox.nic.in/"},ewb:{live:"https://ewaybillgst.gov.in/",sand:"https://docs.ewaybillgst.gov.in/"}};
 function edocBuild(kind){
  const x=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];if(!x)return null;
@@ -481,6 +481,12 @@ function edocBuild(kind){
   BuyerDtls:{Gstin:pt.gstin||"",LglNm:pt.name||"",Pos:pos,Addr1:pt.addr||"",Loc:pt.city||"",Pin:pin(pt.pin),Stcd:stc(pt)},
   ItemList:IL.map((o,i)=>({SlNo:String(i+1),PrdDesc:o.it.name||"",IsServc:"N",HsnCd:o.hsn,Qty:o.q,Unit:o.u,UnitPrice:o.rate,TotAmt:r2(o.q*o.rate),Discount:r2(Math.max(0,o.q*o.rate-o.l.t)),AssAmt:r2(o.l.t),GstRt:o.l.r,IgstAmt:r2(o.s.ig),CgstAmt:r2(o.s.cg),SgstAmt:r2(o.s.sg),TotItemVal:r2(o.l.t+o.l.tx)})),
   ValDtls:{AssVal:r2(g.tv),CgstVal:r2(T.cg),SgstVal:r2(T.sg),IgstVal:r2(T.ig),Discount:r2(dsc),RndOffAmt:r2(rnd),TotInvVal:inv}};
+  if(RS.ew.einvEwb){
+   const E=RS.ew;
+   j.EwbDtls={TransId:E.tid||"",TransName:E.tname||"",TransMode:String(E.transMode||"1"),Distance:+E.dist||0,TransDocNo:E.transDocNo||"",TransDocDt:E.transDocDt?fd(E.transDocDt):"",VehNo:E.veh||"",VehType:E.vehType||"R"};
+   if(!E.dist||+E.dist<=0)need(true,"E-Way Bill Distance (km) must be greater than zero");
+   if(!E.veh&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
+  }
  else{const E=RS.ew;j={supplyType:"O",subSupplyType:"1",docType:"INV",docNo:no,docDate:fd(x.date),
   fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:c.address||"",fromPlace:c.city||"",fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
   toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:pt.addr||"",toPlace:pt.city||"",toPincode:pin(pt.pin),toStateCode:+pos||0,actToStateCode:+pos||0,
@@ -506,11 +512,12 @@ function edocPage0(kind,live){
  const bills=`<div style="margin:0 14px 14px;padding:14px;border:1px solid #d8def0;border-radius:10px;background:#fff">
  <b style="font-size:16px">${kind==="einv"?"Select Sale Bill for E-Invoice":"Select Sale Bill for E-Way Bill"}</b>
  <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${kind==="einv"?(s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"):(s.ewbNumber?"<span style='color:#14803c'>EWB saved</span>":"Pending")}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='${kind==="einv"?"gen2":"gen"}';render()">${s.id===RS.es?"Selected":"Select"}</button> <button onclick="edocBill('${kind}',${live?1:0},'${s.id}')">Generate ${kind==="einv"?"E-Invoice":"E-Way Bill"}</button></td></tr>`).join("")}</tbody></table></div></div>`;
+ const ewbToggle=kind==="einv"?`<div style="margin:0 14px 12px;padding:12px 14px;border:1px solid #c9d3f5;border-radius:9px;background:#f5f8ff"><label style="display:flex;align-items:center;gap:9px;font-weight:700;cursor:pointer"><input type="checkbox" ${E.einvEwb?"checked":""} onchange="RS.ew.einvEwb=this.checked;render()" style="width:17px;height:17px"> E-Invoice के साथ E-Way Bill भी बनाना है?</label><div style="font-size:12px;color:#65708a;margin:5px 0 0 26px">Tick करने पर E-Invoice JSON में EwbDtls भी शामिल होगा। Untick करने पर केवल E-Invoice details भेजी जाएँगी।</div>${E.einvEwb?`<div class="ctl" style="padding:10px 0 0">${inp("dist","E-Way Bill Distance (km)",130)}${inp("veh","Vehicle No.",140)}${inp("tname","Transporter Name",160)}${inp("tid","Transporter ID (GSTIN)",170)}${inp("transDocNo","Transport Document No.",160)}${inp("transDocDt","Transport Document Date",150)}<div style="min-width:140px"><label>Transport Mode</label><select onchange="RS.ew.transMode=this.value;render()"><option value="1" ${E.transMode==="1"?"selected":""}>1 - Road</option><option value="2" ${E.transMode==="2"?"selected":""}>2 - Rail</option><option value="3" ${E.transMode==="3"?"selected":""}>3 - Air</option><option value="4" ${E.transMode==="4"?"selected":""}>4 - Ship</option></select></div><div style="min-width:120px"><label>Vehicle Type</label><select onchange="RS.ew.vehType=this.value;render()"><option value="R" ${E.vehType==="R"?"selected":""}>Regular</option><option value="O" ${E.vehType==="O"?"selected":""}>Over Dimensional Cargo</option></select></div></div>`:""}</div>`:"";
  const ctl=`<div class="ctl"><div style="min-width:260px"><label>Selected Sale Entry</label><input readonly value="${esc(docNo("sale",x0))} • ${esc(lookup("party",x0.party))} • ₹${n2(x0.amount)}"></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
  const r=edocBuild(kind),url=PORT[kind][live?"live":"sand"],nm=kind==="einv"?"E-Invoice":"E-Way Bill";
  const warn=r.iss.length?`<div style="margin:0 14px;padding:10px 14px;background:#fff4de;border-radius:8px;font-size:13px"><b>Please fill in / check these details:</b><br>• ${r.iss.map(esc).join("<br>• ")}</div>`:`<div style="margin:0 14px;padding:10px 14px;background:#e3f7ec;border-radius:8px;font-size:13px">✔ All required details are present</div>`;
  const info=live?`<b>Live (Production):</b> This is the real ${nm}. Verify all details before sending.`:`<b>Sandbox (Testing):</b> This sends the selected bill to the Webtel Sandbox API using the configured credentials.`;
- return bills+ctl+warn+`<div style="padding:12px 14px;font-size:13px;color:#475069">${info}</div>
+ return bills+ewbToggle+ctl+warn+`<div style="padding:12px 14px;font-size:13px;color:#475069">${info}</div>
  <pre style="margin:0 14px 14px;padding:14px;background:#0f1a3a;color:#cfe1ff;border-radius:8px;font-size:12px;max-height:260px;overflow:auto">${esc(JSON.stringify(r.j,null,2))}</pre>
  <div class="ctl" style="padding-top:0"><button onclick="edocDl('${kind}')">⬇ Download JSON</button><button class="g" onclick="edocCp('${kind}')">Copy JSON</button><button class="e" onclick="window.open('${url}','_blank')">Open ${live?"Live":"Sandbox"} Portal</button></div>`;
 }
@@ -1389,7 +1396,7 @@ function render(){
  if(KC[cur]){renderSale();return}
  const m=M[cur];
  $("ttl").textContent=m.title;
- $("extra").innerHTML=cur==="stock"?stockSummary():"";
+ $("extra").innerHTML=cur==="stock"?stockSummary():(cur==="party"?`<div class="ctl" style="margin:10px 0"><button onclick="bulkGstinValidate()">✓ Bulk GSTIN Validate &amp; Auto Update</button><span style="font-size:12px;color:#6b7690">GSTIN वाली सभी पार्टियों की जाँच; केवल खाली विवरण भरे जाएँगे.</span></div><div id="gstin_bulk_result"></div>`:"");
  const q=$("q").value.toLowerCase();
  const cols=m.f.slice();
  if(cur==="receipt"||cur==="payment")cols.push({k:"alloc",l:"Bills Settled"});
@@ -1446,6 +1453,37 @@ function blDraw(){
  if(!L.length){el.innerHTML='<div class="bnote" style="margin-top:12px">No pending bills for this party.</div>';return}
  const tot=Object.values(S).reduce((a,v)=>a+v,0);
  el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${b.date}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)}</div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
+}
+
+async function bulkGstinValidate(){
+ const parties=DB.party.filter(p=>String(p.gstin||"").trim());
+ if(!parties.length){alert("Party Master में GSTIN वाली कोई party नहीं मिली.");return}
+ const C=apiCfg();let cr={};try{cr=JSON.parse(C.live||"{}")}catch(e){alert("Other → Webtel API Settings में E-Invoice Live credentials का JSON ठीक करें.");return}
+ const cd=cr.CDKey||cr.Cdkey||cr.cdkey,efU=cr.EFUserName,efP=cr.EFPassword,eiU=cr.EInvUserName||cr.EInvoiceUserName,eiP=cr.EInvPassword||cr.EInvoicePassword;
+ if(!cd||!efU||!efP||!eiU||!eiP){alert("Bulk GSTIN lookup के लिए E-Invoice Live credentials में CDKey, EFUserName, EFPassword, EInvUserName और EInvPassword भरें.");return}
+ if(!confirm(parties.length+" GSTIN की Webtel LIVE lookup होगी. जारी रखें?"))return;
+ const box=document.getElementById("gstin_bulk_result");if(box)box.innerHTML='<div class="empty">GSTIN जाँचे जा रहे हैं… कृपया पेज बंद न करें.</div>';
+ let ok=0,fail=0,updated=0,rows=[];
+ const first=(o,keys)=>{for(const k of keys){const v=findAny(o,k);if(v!=="")return String(v)}return ""};
+ const findAny=(o,k)=>{if(!o||typeof o!=="object")return "";for(const [a,v] of Object.entries(o)){if(a.toLowerCase()===k.toLowerCase()&&v!==null&&typeof v!=="object"&&String(v).trim()!=="")return v}for(const v of Object.values(o)){const z=findAny(v,k);if(z!=="")return z}return ""};
+ for(let i=0;i<parties.length;i++){
+  const p=parties[i],gst=String(p.gstin).trim().toUpperCase();
+  try{
+   const body={SearchGSTIN:gst,GSTIN:comp().gstin||gst,CDKey:cd,EInvUserName:eiU,EInvPassword:eiP,EFUserName:efU,EFPassword:efP};
+   const res=await fetch("https://einvlive.webtel.in/v1.03/GetGSTINDetails/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+   const raw=await res.text();let j;try{j=JSON.parse(raw)}catch(e){throw new Error("API ने JSON response नहीं दिया (HTTP "+res.status+")")}
+   if(!res.ok)throw new Error("HTTP "+res.status);
+   const msg=first(j,["message","Message","ErrorMessage","error"]),status=first(j,["Status","status","IsValid","Valid"]);
+   if(/invalid|not found|error|fail/i.test(msg)||status.toLowerCase()==="false"||status.toLowerCase()==="invalid")throw new Error(msg||"Invalid GSTIN");
+   const map={name:["TradeName","tradeName","LegalName","LegalNm","Name","lgnm"],addr:["Address","Addr1","PrincipalPlaceOfBusiness","PrincipalAddress","pradr"],city:["City","Location","Loc","district","District"],pin:["Pincode","PinCode","Pin","pncd"],stcode:["StateCode","State_Code","Stcd","stateCode"]};
+   let n=0;for(const [field,keys] of Object.entries(map)){const v=first(j,keys);if(v&&!String(p[field]||"").trim()){p[field]=v;n++}}
+   p.gstinValidation="Valid";p.gstinCheckedAt=new Date().toISOString();ok++;updated+=n;rows.push([gst,"Valid",n+" field(s) updated"]);
+  }catch(e){fail++;p.gstinValidation="Check Failed";p.gstinCheckError=String(e.message||e);rows.push([gst,"Failed",String(e.message||e)])}
+  if(box)box.innerHTML='<div class="empty">Progress: '+(i+1)+' / '+parties.length+'</div>';
+  save();
+ }
+ render();
+ const out=document.getElementById("gstin_bulk_result");if(out)out.innerHTML=`<div class="pan" style="margin:10px 0"><b>Bulk GSTIN Result</b><p>Checked: ${parties.length} &nbsp; Valid: ${ok} &nbsp; Failed: ${fail} &nbsp; Missing details updated: ${updated}</p>${tbl(["GSTIN","Result","Details"],rows)}</div>`;
 }
 
 function openForm(id){
