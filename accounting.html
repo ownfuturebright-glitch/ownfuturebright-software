@@ -556,14 +556,24 @@ async function apiSend(kind,live){
  if(live&&!confirm("LIVE API: "+act[1]+"\nThis "+(kind==="einv"?"e-invoice":"e-way bill")+" will create or change a real document. Are you sure you want to send it?"))return;
  a.resp="Sending...";render();
  try{
-  const r=await fetch(urlOf(kind+e,act),{method:"POST",headers:{"Content-Type":"application/json",...h},body:JSON.stringify(body)});
-  const t=await r.text();a.resp="HTTP "+r.status+"\n"+t;
+  const u0=urlOf(kind+e,act),up=u0.replace(/^http:/i,"https:"),cands=up===u0?[u0]:(location.protocol==="https:"?[up,u0]:[u0,up]);
+  let r,used="",lastErr;
+  for(const u of cands){try{r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json",...h},body:JSON.stringify(body)});used=u;break}catch(er){lastErr=er}}
+  if(!r){lastErr.tried=cands;throw lastErr}
+  const t=await r.text();a.resp="HTTP "+r.status+(used!==u0?"  (sent to "+used+")":"")+"\n"+t;
   try{const J=JSON.parse(t),fa=k=>{const v=fany(J,k);return v===""?"":String(v)},irn=findKey(J,"Irn"),x=DB.sale.find(z=>z.id===RS.es);
    if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;if(x){x.irn=irn;x.ackNo=fa("AckNo")||x.ackNo;x.ackDate=fa("AckDt")||x.ackDate;x.qrCodeImage=fa("QRCodeImage")||fa("qrCodeImage")||x.qrCodeImage;x.signedQrCode=fa("SignedQRCode")||x.signedQrCode;save()}}
    const en=fa("ewayBillNo")||fa("EwbNo")||fa("ewbNo");
    if(en&&kind==="ewb"&&x&&(a.act==="gen"||a.act==="genirn")){x.ewbNumber=en;x.ewbDate=fa("ewayBillDate")||fa("EwbDt")||x.ewbDate;x.ewbValidTill=fa("validUpto")||fa("EwbValidTill")||x.ewbValidTill;save()}
   }catch(x){}
- }catch(x){a.resp="Request failed: "+x.message+"\n\nPossible reasons: CORS block, network problem or an http/https mismatch. Ask Webtel to allow this page's origin, or use a small backend / proxy."}
+ }catch(x){
+  const u=(x.tried||[urlOf(kind+e,act)]).join("  and  "),hint=[];
+  if(typeof navigator!=="undefined"&&navigator.onLine===false)hint.push("• The device looks offline. Check the internet connection.");
+  if(location.protocol==="https:"&&/^http:/i.test(u))hint.push("• This page is opened on https but the API URL is http, so the browser blocks it (mixed content). Open the software from an http address or a local file, or ask Webtel for an https URL.");
+  if(location.protocol==="file:")hint.push("• This page is opened as a local file, so the browser sends the origin as \"null\". Webtel must allow all origins (Access-Control-Allow-Origin: *) for this to work.");
+  hint.push("• The API server must reply to the browser's pre-check (OPTIONS) with CORS headers allowing Content-Type"+(C.mode==="headers"?" and your credential headers":"")+". If it does not, ask Webtel to enable CORS for this page's origin.");
+  hint.push("• If Webtel cannot enable CORS, call the API through a small backend or proxy.");
+  a.resp="Request failed: "+x.message+"\nTried URL: "+u+"\nPage address: "+location.protocol+"//"+(location.host||"(local file)")+"\n\nPossible reasons:\n"+hint.join("\n")}
  render();
 }
 function edocPage(kind,live){RS.sbx=!live;return edocPage0(kind,live)+(DB.sale.length?apiPanel(kind,live):"")}
