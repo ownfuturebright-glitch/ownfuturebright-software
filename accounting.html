@@ -428,27 +428,68 @@ const R={
   return ctl+tb+panel}}
 };
 
-const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
+const REG={saleregister:"sale",purchaseregister:"purchase",receiptregister:"receipt",paymentregister:"payment",journalregister:"journal",salereturnregister:"salereturn",purchasereturnregister:"purchasereturn"};
 function regFilterHtml(rk){
  const f=RS.regf=RS.regf||{};const v=f[rk]||{};
  const field=(k,label,ph,type="text")=>`<div><label>${label}</label><input type="${type}" placeholder="${ph}" value="${esc(v[k]||"")}" onchange="regFilterSet('${rk}','${k}',this.value)"></div>`;
- return `<div style="background:#f8faff;border:1px solid #dce4f5;border-radius:10px;padding:12px;margin:10px 0"><b style="font-size:12px">Transaction Filters</b><div class="ctl" style="padding:8px 0 0">${field("date","Date","Date","date")}${field("voucher","Voucher No.","Number search")}${field("party","Party / Particulars","Party search")}${field("debit","Debit","Amount","number")}${field("credit","Credit","Amount","number")}<div style="min-width:100px"><label>&nbsp;</label><button class="g" onclick="regFilterClear('${rk}')">Clear Filters</button></div></div></div>`;
+ return `<div style="background:#f8faff;border:1px solid #dce4f5;border-radius:10px;padding:12px;margin:10px 0"><b style="font-size:12px">Transaction Filters</b><div class="ctl" style="padding:8px 0 0">${field("date","Date","Date","date")}${field("voucher","Voucher No.","Number search")}${field("party","Party / Particulars","Party search")}${field("particular","Particulars","Item / Narration search")}${field("debit","Debit","Amount","number")}${field("credit","Credit","Amount","number")}<div style="min-width:100px"><label>&nbsp;</label><button class="g" onclick="regFilterClear('${rk}')">Clear Filters</button></div></div></div>`;
 }
 function regFilterSet(rk,k,v){RS.regf=RS.regf||{};RS.regf[rk]=RS.regf[rk]||{};RS.regf[rk][k]=v;render()}
 function regFilterClear(rk){if(RS.regf)delete RS.regf[rk];render()}
-Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx;
+Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx,isJ=mk==="journal";
  R[rk]={t:M[mk].title.replace(" Entry","").replace(" Voucher","")+" Register",f(){
   const f=(RS.regf&&RS.regf[rk])||{};
-  const l=DB[mk].filter(inBookPeriod).filter(x=>{
-   const party=lookup("party",x.party).toLowerCase(),no=String(x.inv||x.number||"").toLowerCase();
-   const amount=+x.amount||0,dr=["sale","payment","salereturn"].includes(mk)?amount:0,cr=["purchase","receipt","purchasereturn"].includes(mk)?amount:0;
-   return (!f.date||x.date===f.date)&&(!f.voucher||no.includes(f.voucher.toLowerCase()))&&(!f.party||party.includes(f.party.toLowerCase()))&&(!f.debit||dr>=(+f.debit||0))&&(!f.credit||cr>=(+f.credit||0));
+  const source=(DB[mk]||[]).filter(inBookPeriod).slice();
+  const l=source.filter(x=>{
+   let party="",no="",particular="",dr=0,cr=0,date=x.date||"";
+   if(isJ){
+    const L=jLines(x);
+    party=L.filter(a=>a.dr>0).map(a=>lookup("party",a.acc)).join(", ");
+    particular=L.filter(a=>a.cr>0).map(a=>lookup("party",a.acc)).join(", ");
+    no=x.number||("JV-"+(x.no||""));
+    dr=L.reduce((a,z)=>a+(+z.dr||0),0);
+    cr=L.reduce((a,z)=>a+(+z.cr||0),0);
+    particular=(particular?("Cr: "+particular):"")+(x.remark?((particular?" | ":"")+x.remark):"");
+   }else{
+    party=lookup("party",x.party);
+    no=x.inv||x.number||x.voucherNo||docNo(mk,x);
+    particular=isT?lookup("item",x.item):(x.remark||x.narration||"-");
+    const amount=+x.amount||0;
+    dr=["sale","payment","salereturn"].includes(mk)?amount:0;
+    cr=["purchase","receipt","purchasereturn"].includes(mk)?amount:0;
+   }
+   const searchPart=(String(particular)+" "+String(x.remark||"")).toLowerCase();
+   return (!f.date||date===f.date)&&(!f.voucher||String(no).toLowerCase().includes(f.voucher.toLowerCase()))&&
+    (!f.party||String(party).toLowerCase().includes(f.party.toLowerCase())||searchPart.includes(f.party.toLowerCase()))&&
+    (!f.particular||searchPart.includes(f.particular.toLowerCase()))&&
+    (!f.debit||dr>=(+f.debit||0))&&(!f.credit||cr>=(+f.credit||0));
   }).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
   const ctl=bookPeriodControls()+regFilterHtml(rk);
-  const tot=l.reduce((a,x)=>a+(+x.amount||0),0);
-  const rows=l.map((x,i)=>isT?[i+1,x.date,esc(x.inv||""),esc(lookup("party",x.party)),esc(lookup("item",x.item)),x.qty,n2(x.rate),n2(x.amount),esc(x.remark||""),act(mk,x.id)]:[i+1,`<a class="lnk" style="font-size:13px" onclick="recOpen('${mk}','${x.id}')" title="Open this entry">${x.date}</a>`,esc(x.number||""),esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(["payment"].includes(mk)?x.amount:0),n2(["receipt"].includes(mk)?x.amount:0),esc(x.remark||""),act(mk,x.id)]);
-  const h=isT?["#","Date","Voucher No.","Party","Item","Qty","Rate","Amount","Remark","Action"]:["#","Date","Voucher No.","Party","Mode","Debit","Credit","Remark","Action"];
-  return ctl+tbl(h,rows,`Entries: ${l.length} &nbsp; Total: ₹ ${n2(tot)}`)}}});
+  let td=0,tc=0;
+  const rows=l.map((x,i)=>{
+   let party="",no="",particular="",dr=0,cr=0;
+   if(isJ){
+    const L=jLines(x);
+    party=L.filter(a=>a.dr>0).map(a=>lookup("party",a.acc)).join(", ")||"-";
+    const crParty=L.filter(a=>a.cr>0).map(a=>lookup("party",a.acc)).join(", ");
+    particular=(crParty?"Cr: "+crParty:"")+(x.remark?((crParty?" | ":"")+x.remark):"");
+    no=x.number||("JV-"+(x.no||""));
+    dr=L.reduce((a,z)=>a+(+z.dr||0),0);cr=L.reduce((a,z)=>a+(+z.cr||0),0);
+   }else{
+    party=lookup("party",x.party);
+    no=x.inv||x.number||x.voucherNo||docNo(mk,x);
+    particular=isT?(lookup("item",x.item)+(x.qty?" | Qty: "+x.qty:"")+(x.rate?" | Rate: ₹"+n2(x.rate):"")):(x.remark||x.narration||"-");
+    const amount=+x.amount||0;
+    dr=["sale","payment","salereturn"].includes(mk)?amount:0;
+    cr=["purchase","receipt","purchasereturn"].includes(mk)?amount:0;
+   }
+   td+=dr;tc+=cr;
+   return [i+1,fd(x.date),esc(no),esc(party),esc(particular||"-"),n2(dr),n2(cr),act(mk,x.id)];
+  });
+  return ctl+tbl(["#","Date","Voucher No.","Party / Debit A/c","Particulars / Credit A/c","Debit (₹)","Credit (₹)","Action"],rows,
+   `Entries: ${l.length} &nbsp; Total Debit: ₹ ${n2(td)} &nbsp; Total Credit: ₹ ${n2(tc)}`);
+ }}}); 
+R.journalbook=R.journalregister;
 /* ===== Auto PO ===== */
 function apoRows(){
  const lim=i=>i.minq===undefined||i.minq===""?10:+i.minq;
