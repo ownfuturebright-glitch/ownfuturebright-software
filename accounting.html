@@ -191,7 +191,7 @@ const M={
  payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  journal:{title:"Journal Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date"},{k:"accounts",l:"Accounts (Dr → Cr)"},{k:"amount",l:"Amount"},{k:"remark",l:"Narration"}]}
 };
-const GROUPS=[["Master","📦",["party","item","users"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
+const GROUPS=[["Company","🏢",["company"]],["Master","📦",["party","item","users"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
 const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
 const PT={users:"User Management",accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
 const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",users:"👤",invset:"🔢",apiset:"🔑",urlset:"🔗"};
@@ -274,8 +274,19 @@ const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
 const isCashParty=p=>!!p&&(p.cash==="Yes"||/^(cash|bank|sales?|purchases?)(\s*(a\/c|ac|account|accounts|sales?|purchases?|returns?))*$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
 /* Outstanding is only for real trade parties: opening balance or at least one Sale / Purchase / Return bill. Accounts that only appear in Journal or Payment entries are left out */
 const tradeParty=p=>(+p.opening||0)!==0||["sale","salereturn","purchase","purchasereturn"].some(k=>DB[k].some(x=>x.party===p.id));
-/* Which Outstanding report a party belongs to: customer-only (has Sale bills, no Purchase bills) -> Receivable, supplier-only -> Payable, mixed -> by balance sign. A negative amount means advance. */
-const partySide=p=>{const b=recvBal(p);if(!b)return null;const has=ks=>ks.some(k=>DB[k].some(x=>x.party===p.id)),c=has(["sale","salereturn"]),s=has(["purchase","purchasereturn"]);const side=c&&!s?"recv":s&&!c?"pay":(b>0?"recv":"pay");return{side,amt:side==="recv"?b:-b}};
+/* Which Outstanding report a party belongs to: Party Type Customer -> Receivable, Supplier -> Payable; for Both it follows the entries (Sale / Receipt / JV receipt = customer side, Purchase / Payment / JV payment = supplier side), mixed -> by balance sign. A negative amount means advance. */
+const isBankAcc=id=>{const x=DB.party.find(z=>z.id===id);return !!x&&/\b(cash|bank)\b/i.test(String(x.name||""))};
+const partySide=p=>{
+ const b=recvBal(p);if(!b)return null;
+ const has=ks=>ks.some(k=>DB[k].some(x=>x.party===p.id));
+ /* Journal vouchers count like Receipt / Payment: Bank Dr + Party Cr = receipt (customer side); Party Dr + Bank Cr = payment (supplier side) */
+ let jr=false,jp=false;
+ DB.journal.forEach(j=>{const L=jLines(j);if(!L.some(l=>l.acc===p.id))return;
+  if(L.some(l=>l.acc===p.id&&l.cr>0)&&L.some(l=>l.dr>0&&isBankAcc(l.acc)))jr=true;
+  if(L.some(l=>l.acc===p.id&&l.dr>0)&&L.some(l=>l.cr>0&&isBankAcc(l.acc)))jp=true});
+ const c=has(["sale","salereturn","receipt"])||jr,s=has(["purchase","purchasereturn","payment"])||jp;
+ const side=p.type==="Customer"?"recv":p.type==="Supplier"?"pay":c&&!s?"recv":s&&!c?"pay":(b>0?"recv":"pay");
+ return{side,amt:side==="recv"?b:-b}};
 const recvBal=p=>isCashParty(p)||!tradeParty(p)?0:(Math.abs(bal(p))<0.5?0:Math.round(bal(p)*100)/100);
 function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
 function reportTable(){return document.querySelector('#list table')}
