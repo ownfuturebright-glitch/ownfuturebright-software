@@ -254,7 +254,9 @@ function entries(pid){const e=[];
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
 /* Cash / Bank / Sale / Purchase accounts (and any party marked Cash Party = Yes) are ledger accounts, not real parties, so they are left out of Outstanding / Receivable / Payable */
 const isCashParty=p=>!!p&&(p.cash==="Yes"||/^(cash|bank|sales?|purchases?)(\s*(a\/c|ac|account|accounts|sales?|purchases?|returns?))*$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
-const recvBal=p=>isCashParty(p)?0:bal(p);
+/* Outstanding is only for real trade parties: opening balance or at least one Sale / Purchase / Return bill. Accounts that only appear in Journal or Payment entries are left out */
+const tradeParty=p=>(+p.opening||0)!==0||["sale","salereturn","purchase","purchasereturn"].some(k=>DB[k].some(x=>x.party===p.id));
+const recvBal=p=>isCashParty(p)||!tradeParty(p)?0:bal(p);
 function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
 function reportTable(){return document.querySelector('#list table')}
 function exportReportExcel(){
