@@ -252,8 +252,8 @@ function entries(pid){const e=[];
  DB.journal.forEach(x=>jLines(x).forEach(l=>{if(l.acc===pid&&(l.dr||l.cr))e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:l.dr,cr:l.cr})}));
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
-/* Cash parties (Cash, Cash Sale, ...) are settled on the spot, so they are left out of Outstanding / Receivable / Payable */
-const isCashParty=p=>!!p&&(p.cash==="Yes"||/^cash(\s*(a\/c|account|sales?|purchases?))?$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
+/* Cash / Bank / Sale / Purchase accounts (and any party marked Cash Party = Yes) are ledger accounts, not real parties, so they are left out of Outstanding / Receivable / Payable */
+const isCashParty=p=>!!p&&(p.cash==="Yes"||/^(cash|bank|sales?|purchases?)(\s*(a\/c|ac|account|accounts|sales?|purchases?|returns?))*$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
 const recvBal=p=>isCashParty(p)?0:bal(p);
 function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
 function reportTable(){return document.querySelector('#list table')}
