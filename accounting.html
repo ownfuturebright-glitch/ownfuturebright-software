@@ -137,6 +137,13 @@ dialog::backdrop{background:#0006}
 .voucher-grid .wide{grid-column:1/-1}
 .voucher-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px;flex-wrap:wrap}
 .vno{display:flex;border:1px solid #cfd6ea;border-radius:8px;overflow:hidden;height:39px;background:#fff}.vno span{background:#eef1f7;padding:0 10px;display:flex;align-items:center;font-weight:700;font-size:13px}.vno input{border:0;flex:1;height:100%;min-width:0}.voucher-grid input.vamt{height:50px;font-size:20px;font-weight:800;color:#111a33}.voucher-grid input.vamt::placeholder{color:#a3acc0;font-weight:700}.voucher-actions button:last-child{padding:9px 16px}
+.authov{position:fixed;inset:0;background:#f2f4fa;z-index:9999;display:flex;align-items:center;justify-content:center}
+.authbox{background:#fff;border-radius:16px;padding:34px 30px;width:min(380px,92vw);box-shadow:0 8px 30px #1a2a5522;text-align:center}
+.authbox h2{margin:0 0 4px;font-size:22px}.authbox p{margin:0 0 20px;color:#6b7690;font-size:13px}
+.authbox label{display:block;text-align:left;font-size:12px;font-weight:700;color:#1d2433;margin:12px 0 6px}
+.authbox input{width:100%;height:42px}.authbox button{width:100%;margin-top:18px;height:44px;background:#3151d3;color:#fff;border:0;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer}
+.authbox .aerr{color:#d6264f;font-size:12px;min-height:16px;margin-top:10px}
+.ucos{display:flex;flex-wrap:wrap;gap:8px 18px;padding:4px 0}.ucos label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#1d2433;margin:0}.ucos input{width:auto;height:auto}
 .jhead{display:flex;justify-content:space-between;align-items:center;padding:15px 18px}.jhead b{font-size:13px}
 .jlink{background:none;border:0;color:#315bff;font-weight:700;font-size:12px;cursor:pointer;padding:0}
 .jwrap{overflow-x:auto}.jtbl{width:100%;border-collapse:collapse;min-width:640px}
@@ -184,10 +191,10 @@ const M={
  payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  journal:{title:"Journal Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date"},{k:"accounts",l:"Accounts (Dr → Cr)"},{k:"amount",l:"Amount"},{k:"remark",l:"Narration"}]}
 };
-const GROUPS=[["Master","📦",["party","item"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
+const GROUPS=[["Master","📦",["party","item","users"]],["Company","🏢",["company"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
 const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
-const PT={accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
-const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",invset:"🔢",apiset:"🔑",urlset:"🔗"};
+const PT={users:"User Management",accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
+const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",users:"👤",invset:"🔢",apiset:"🔑",urlset:"🔗"};
 const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:false,Other:false};
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
@@ -195,6 +202,17 @@ let DB={};
 try{DB=JSON.parse(localStorage.getItem("acc_db")||"{}")}catch(e){DB={}}
 Object.keys(M).forEach(k=>DB[k]=DB[k]||[]);
 const save=()=>{try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}bkAuto()};
+/* ===== Users & company permissions (login is optional: it turns on when an Admin is created) ===== */
+DB.users=Array.isArray(DB.users)?DB.users:[];
+const AUTH={uid:""};try{AUTH.uid=sessionStorage.getItem("acc_sess")||""}catch(e){}
+const pwHash=s=>{s="acc|"+s;let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,c;i<s.length;i++){c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36)};
+const authOn=()=>DB.users.some(u=>u.role==="admin");
+const curUser=()=>DB.users.find(u=>u.id===AUTH.uid);
+const isAdmin=()=>!authOn()||(curUser()||{}).role==="admin";
+const coAllowed=id=>isAdmin()||((curUser()||{}).companies||[]).includes(id);
+const visCos=()=>DB.company.filter(c=>coAllowed(c.id));
+const NAV_ADMIN=["company","users","backup","apiset","urlset"];
+const navOk=k=>isAdmin()||!NAV_ADMIN.includes(k);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const lookup=(src,id)=>{if(!id)return "";const r=DB[src].find(x=>x.id===id);return r?r.name:"(deleted)"};
@@ -224,9 +242,9 @@ function regOpen(k,id){RS.back=KC[cur]?null:cur;cur=k;RS.sf=null;openSale(id)}
 function recOpen(k,id){RS.ret=cur;RS.newParty=null;RS.newItem=null;cur=k;render();openForm(id)}
 function go(k){cur=k;RS.sf=null;RS.vf=null;RS.back=null;render();openForm()}
 function renderTop(){
- const cs=DB.company,c=cs.find(x=>x.id===RS.company)||cs[0];
+ const cs=visCos(),c=cs.find(x=>x.id===RS.company)||cs[0];
  let fy="";for(let y=FY0-3;y<=FY0+1;y++)fy+=`<option value="${y}" ${y===RS.fy?"selected":""}>${fyl(y)}</option>`;
- $("top").innerHTML=`<div class="tc"><span class="ic">🏢</span><div><small>CURRENT COMPANY</small><select onchange="coPick(this.value)">${cs.length?cs.map(x=>`<option value="${x.id}" ${c&&x.id===c.id?"selected":""}>${esc(x.name)}</option>`).join(""):"<option>Create a company</option>"}</select></div></div><div class="tc"><span class="ic">📅</span><div><small>FINANCIAL YEAR</small><select onchange="RS.fy=+this.value;render()">${fy}</select></div></div><span class="badge">✔ Saved in Browser</span><span class="av">${esc((c?c.name:"A").slice(0,2).toUpperCase())}</span>`;
+ $("top").innerHTML=`<div class="tc"><span class="ic">🏢</span><div><small>CURRENT COMPANY</small><select onchange="coPick(this.value)">${cs.length?cs.map(x=>`<option value="${x.id}" ${c&&x.id===c.id?"selected":""}>${esc(x.name)}</option>`).join(""):"<option>Create a company</option>"}</select></div></div><div class="tc"><span class="ic">📅</span><div><small>FINANCIAL YEAR</small><select onchange="RS.fy=+this.value;render()">${fy}</select></div></div><span class="badge">✔ Saved in Browser</span>${authOn()&&curUser()?`<span class="badge" style="background:#e8edff;color:#3d5afe">👤 ${esc(curUser().name)}${isAdmin()?" (Admin)":""}</span><button class="g" onclick="doLogout()">Logout</button>`:""}<span class="av">${esc((c?c.name:"A").slice(0,2).toUpperCase())}</span>`;
 }
 const sum=k=>DB[k].reduce((a,x)=>a+sv(x),0);
 const stockQty=i=>{let q=+i.openq||0;const s=k=>DB[k].reduce((a,x)=>a+lines(x).filter(l=>l.item===i.id).reduce((b,l)=>b+(+l.qty||0),0),0);
@@ -256,7 +274,9 @@ const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
 const isCashParty=p=>!!p&&(p.cash==="Yes"||/^(cash|bank|sales?|purchases?)(\s*(a\/c|ac|account|accounts|sales?|purchases?|returns?))*$/i.test(String(p.name||"").trim().replace(/\s+/g," ")));
 /* Outstanding is only for real trade parties: opening balance or at least one Sale / Purchase / Return bill. Accounts that only appear in Journal or Payment entries are left out */
 const tradeParty=p=>(+p.opening||0)!==0||["sale","salereturn","purchase","purchasereturn"].some(k=>DB[k].some(x=>x.party===p.id));
-const recvBal=p=>isCashParty(p)||!tradeParty(p)?0:bal(p);
+/* Which Outstanding report a party belongs to: customer-only (has Sale bills, no Purchase bills) -> Receivable, supplier-only -> Payable, mixed -> by balance sign. A negative amount means advance. */
+const partySide=p=>{const b=recvBal(p);if(!b)return null;const has=ks=>ks.some(k=>DB[k].some(x=>x.party===p.id)),c=has(["sale","salereturn"]),s=has(["purchase","purchasereturn"]);const side=c&&!s?"recv":s&&!c?"pay":(b>0?"recv":"pay");return{side,amt:side==="recv"?b:-b}};
+const recvBal=p=>isCashParty(p)||!tradeParty(p)?0:(Math.abs(bal(p))<0.5?0:Math.round(bal(p)*100)/100);
 function reportExportButtons(){return `<div class="ctl" style="justify-content:flex-end;gap:8px;margin:10px 0"><button type="button" onclick="exportReportExcel()">⬇ Export to Excel</button><button type="button" onclick="exportReportPDF()">⬇ Export to PDF</button></div>`}
 function reportTable(){return document.querySelector('#list table')}
 function exportReportExcel(){
@@ -306,9 +326,9 @@ function book(title,pick){
  return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
 }
 function outst(recv){
- const l=DB.party.map(p=>[p,recvBal(p)]).filter(([p,b])=>recv?b>0:b<0);
- const t=l.reduce((a,[p,b])=>a+Math.abs(b),0);
- return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+ const l=DB.party.map(p=>[p,(partySide(p)||{}).amt,(partySide(p)||{}).side]).filter(([p,b,sd])=>sd===(recv?"recv":"pay"));
+ const t=l.reduce((a,[p,b])=>a+b,0);
+ return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))+(b<0?" (Advance)":"")]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
 }
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
@@ -329,7 +349,7 @@ const R={
  dashboard:{t:"Dashboard",f(){
   const from=RS.fy+"-04-01",to=(RS.fy+1)+"-03-31",inF=x=>x.date>=from&&x.date<=to;
   const fy=k=>DB[k].filter(inF).reduce((a,x)=>a+sv(x),0);
-  const bl=DB.party.map(recvBal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0);
+  const bl=DB.party.map(partySide).filter(Boolean),rc=bl.filter(x=>x.side==="recv").reduce((a,x)=>a+x.amt,0),pb=bl.filter(x=>x.side==="pay").reduce((a,x)=>a+x.amt,0);
   const L=fyl(RS.fy),mv=Array(12).fill(0),nm=["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
   DB.sale.filter(inF).forEach(x=>mv[(parseInt(x.date.slice(5,7))+8)%12]+=sv(x));
   const mx=Math.max(...mv,1);
@@ -354,7 +374,7 @@ const R={
   const ns=sum("sale")-sum("salereturn"),np=sum("purchase")-sum("purchasereturn"),gp=ns+cl-op-np;
   return tbl(["Particulars","Amount (₹)"],[["Opening Stock",n2(op)],["Purchases",n2(sum("purchase"))],["Less: Purchase Return",n2(sum("purchasereturn"))],["Net Purchases",n2(np)],["Sales",n2(sum("sale"))],["Less: Sale Return",n2(sum("salereturn"))],["Net Sales",n2(ns)],["Closing Stock (at purchase rate)",n2(cl)],[`<b>${gp>=0?"Gross Profit":"Gross Loss"}</b>`,`<b class="${gp<0?"neg":""}">${n2(Math.abs(gp))}</b>`]])}},
  finpos:{t:"Financial Position",f(){
-  const bl=DB.party.map(recvBal),rc=bl.filter(b=>b>0).reduce((a,b)=>a+b,0),pb=-bl.filter(b=>b<0).reduce((a,b)=>a+b,0),[c,b]=cashBank(),sv=stockVal();
+  const bl=DB.party.map(partySide).filter(Boolean),rc=bl.filter(x=>x.side==="recv").reduce((a,x)=>a+x.amt,0),pb=bl.filter(x=>x.side==="pay").reduce((a,x)=>a+x.amt,0),[c,b]=cashBank(),sv=stockVal();
   return tbl(["Particulars","Amount (₹)"],[["Receivable (Debtors)",n2(rc)],["Payable (Creditors)",n2(pb)],["Cash in Hand",n2(c)],["Bank / UPI / Cheque",n2(b)],["Stock Value",n2(sv)],["<b>Net (Receivable + Cash + Bank + Stock − Payable)</b>",`<b>${n2(rc+c+b+sv-pb)}</b>`]])}},
  ledger:{t:"Party Ledger",f(){
   const ctl=`<div class="ctl"><div><label>Party</label><select onchange="RS.party=this.value;render()"><option value="">-- Select --</option>${DB.party.map(p=>`<option value="${p.id}" ${p.id===RS.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>${dateCtl("from","From")}${dateCtl("to","To")}</div>`;
@@ -439,7 +459,7 @@ R.autopo={t:"Auto PO Generate",f(){
 /* ===== Utility ===== */
 const UQC={Pcs:"PCS",Kg:"KGS",Gm:"GMS",Ltr:"LTR",Box:"BOX",Mtr:"MTR",Dozen:"DOZ",Nos:"NOS"};
 const fd=d=>String(d||"").split("-").reverse().join("/");
-const comp=()=>DB.company.find(x=>x.id===RS.company)||DB.company[0]||{};
+const comp=()=>{const v=visCos();return v.find(x=>x.id===RS.company)||v[0]||{}};
 const stc=x=>String(x.stcode||(x.gstin||"").slice(0,2)||"").trim();
 const docNo=(k,x)=>x.inv||(k==="sale"?"S":"SR")+String(DB[k].indexOf(x)+1).padStart(4,"0");
 const r2=v=>Math.round((+v||0)*100)/100;
@@ -486,7 +506,7 @@ function gstReminderDone(k){const S=DB.settings.gstReminder=DB.settings.gstRemin
 function gstReminderCheck(force){const S=DB.settings.gstReminder||{enabled:true,gstr1:5,gstr3b:10};if(S.enabled===false&&!force)return;const d=+today().slice(8,10),m=today().slice(0,7),done=S.done||{};const due=[ ["gstr1","GSTR-1",+S.gstr1||5],["gstr3b","GSTR-3B",+S.gstr3b||10] ].filter(x=>d>=x[2]&&!done[m+"_"+x[0]]);if(due.length)alert("GST Return Reminder\n"+due.map(x=>x[1]+" is due on "+x[2]+"th. Please prepare/file the return.").join("\n"));else if(force)alert("Aaj koi pending GST return reminder nahi hai.")}
 
 R.payremind={t:"Payment Reminder",f(){
- const l=DB.party.map(p=>[p,recvBal(p)]).filter(([p,b])=>b>0).sort((a,b)=>b[1]-a[1]);
+ const l=DB.party.map(p=>[p,(partySide(p)||{}).amt,(partySide(p)||{}).side]).filter(([p,b,sd])=>sd==="recv"&&b>0).sort((a,b)=>b[1]-a[1]);
  const ctl=`<div style="padding:14px"><label style="margin-top:0">Message ({name}, {amount} and {company} are filled in automatically)</label><textarea rows="3" oninput="RS.rmsg=this.value">${esc(RS.rmsg)}</textarea></div>`;
  return ctl+tbl(["Party","Phone","City","Outstanding (Dr)","Reminder"],l.map(([p,b])=>[esc(p.name),esc(p.phone||""),esc(p.city||""),n2(b),`<button class="e" style="background:#25a244" onclick="wa('${p.id}')">WhatsApp</button> <button class="e" style="background:#8a94a8" onclick="cpRem('${p.id}')">Copy</button>`]),`Total outstanding: ₹ ${n2(l.reduce((a,[p,b])=>a+b,0))}`)}};
 
@@ -656,12 +676,22 @@ function coPick(id){
  coStash();coLoad(id);RS.sf=null;RS.vf=null;RS.back=null;save();render();
 }
 function coEnsure(){
- if(DB.company.some(c=>c.id===DB.activeCo)){RS.company=DB.activeCo;return}
- DB.activeCo=DB.company.length?DB.company[0].id:"";RS.company=DB.activeCo;
+ const v=visCos();
+ if(v.some(c=>c.id===DB.activeCo)){RS.company=DB.activeCo;return}
+ if(!isAdmin()){
+  coStash();
+  if(v.length){coLoad(v[0].id)}
+  else{CO_KEYS.forEach(k=>{DB[k]=[]});DB.settings=DB.settings||{};DB.settings.invp={};DB.activeCo="";RS.company=""}
+  return;
+ }
+ const first=DB.company.length?DB.company[0].id:"";
+ if(first&&DB.cd&&DB.cd[first]){coStash();coLoad(first);return}
+ DB.activeCo=first;RS.company=DB.activeCo;
 }
 function coDel(id){
  if(!confirm("Deleting a company also deletes all of its parties, items and vouchers. Are you sure?"))return;
  DB.company=DB.company.filter(x=>x.id!==id);
+ DB.users.forEach(u=>{u.companies=(u.companies||[]).filter(x=>x!==id)});
  if(DB.cd)delete DB.cd[id];
  if(id===DB.activeCo){
   CO_KEYS.forEach(k=>{DB[k]=[]});DB.settings=DB.settings||{};DB.settings.invp={};DB.activeCo=undefined;
@@ -1383,7 +1413,7 @@ const $=id=>document.getElementById(id);
 
 function buildNav(){
  const it=k=>CH[k]?`<a data-p="${k}"><span>${ICON[k]}</span>${T(k)}<span class="ar2">${OPEN[k]?"⌃":"⌄"}</span></a><div class="sub ${OPEN[k]?"":"shut"}">${CH[k].map(c=>`<a data-k="${c}" class="${c===cur?"on":""}">${T(c)}</a>`).join("")}</div>`:`<a data-k="${k}" class="${k===cur?"on":""}"><span>${ICON[k]}</span>${T(k)}</a>`;
- $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks])=>`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>").join("");
+ $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks0])=>{const ks=ks0.filter(navOk);return !ks.length?"":`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>"}).join("");
  $("nav").querySelectorAll(".gh").forEach(h=>h.onclick=()=>{OPEN[h.dataset.g]=!OPEN[h.dataset.g];buildNav()});
  $("nav").querySelectorAll("a[data-p]").forEach(a=>a.onclick=()=>{OPEN[a.dataset.p]=!OPEN[a.dataset.p];buildNav()});
  $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.back=null;RS.vf=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
@@ -1401,6 +1431,9 @@ function stockSummary(){
 }
 
 function render(){
+ if(authOn()&&!curUser()){showLogin();return}
+ hideLogin();
+ if(!isAdmin()&&NAV_ADMIN.includes(cur))cur="dashboard";
  coEnsure();
  if(RS.vf&&RS.vf.k!==cur)RS.vf=null;
  if(RS.lastCur!==cur){RS.lastCur=cur;GROUPS.forEach(([g,,ks])=>{if(ks.includes(cur))OPEN[g]=true});Object.keys(CH).forEach(q=>{if(CH[q].includes(cur)){OPEN[q]=true;GROUPS.forEach(([g,,ks])=>{if(ks.includes(q))OPEN[g]=true})}})}
@@ -1408,6 +1441,7 @@ function render(){
  const isR=!!R[cur],dash=cur==="dashboard";
  $("add").style.display=(!isR||dash)?"":"none";$("q").style.display=isR?"none":"";
  $("add").textContent=dash?"+ Create Company":"+ Create New";
+ if(!isAdmin()&&dash)$("add").style.display="none";
  $("list").className=(dash||cur==="urlset"||cur==="invset"||cur==="backup")?"":"card";
  const gated=cur==="apiset"||cur==="urlset";
  if(!gated)RS.gateOk="";
@@ -1425,6 +1459,7 @@ function render(){
    $("extra").innerHTML=reportExportButtons();
   }
   return}
+ if(cur==="users"){renderUsers();return}
  if(KC[cur]){renderSale();return}
  if(VK[cur]&&RS.vf){renderVoucher();return}
  const m=M[cur];
@@ -1434,7 +1469,7 @@ function render(){
  const cols=m.f.slice();
  if(cur==="receipt"||cur==="payment")cols.push({k:"alloc",l:"Bills Settled"});
  if(m.tx)cols.push({k:"amount",l:"Amount"});
- let data=DB[cur].map(r=>cur==="journal"?{...r,accounts:jSum(r)}:r).filter(r=>!q||cols.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q)));
+ let data=DB[cur].filter(r=>cur!=="company"||coAllowed(r.id)).map(r=>cur==="journal"?{...r,accounts:jSum(r)}:r).filter(r=>!q||cols.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q)));
  if(!data.length){$("list").innerHTML='<div class="empty">No records found</div>';return}
  let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
  data.forEach((r,i)=>{
@@ -1739,6 +1774,82 @@ function jSave(){
  save();RS.vf=null;render();
 }
 
+/* ===== Login screen ===== */
+function showLogin(){
+ let d=$("authbox");if(!d){d=document.createElement("div");d.id="authbox";document.body.appendChild(d)}
+ d.className="authov";d.style.display="flex";
+ d.innerHTML=`<div class="authbox"><div style="font-size:34px">📒</div><h2>Accounts Login</h2><p>Sign in to continue</p><label>Username</label><input id="lg_u" autocomplete="username"><label>Password</label><input id="lg_p" type="password" autocomplete="current-password"><div class="aerr" id="lg_err"></div><button type="button" onclick="doLogin()">Login</button></div>`;
+ d.querySelectorAll("input").forEach(e=>e.onkeydown=ev=>{if(ev.key==="Enter")doLogin()});
+ setTimeout(()=>{const e=$("lg_u");if(e)e.focus()},50);
+}
+function hideLogin(){const d=$("authbox");if(d)d.style.display="none"}
+function doLogin(){
+ const n=($("lg_u").value||"").trim().toLowerCase(),pw=$("lg_p").value||"";
+ const u=DB.users.find(x=>x.name.toLowerCase()===n&&x.ph===pwHash(pw));
+ if(!u){$("lg_err").textContent="Invalid username or password";return}
+ AUTH.uid=u.id;try{sessionStorage.setItem("acc_sess",u.id)}catch(e){}
+ cur="dashboard";RS.sf=null;RS.vf=null;RS.back=null;RS.uf=null;render();
+}
+function doLogout(){
+ AUTH.uid="";try{sessionStorage.removeItem("acc_sess")}catch(e){}
+ cur="dashboard";RS.sf=null;RS.vf=null;RS.back=null;RS.uf=null;render();
+}
+
+/* ===== User Management (Admin only) ===== */
+RS.uf=null;
+function renderUsers(){
+ $("ttl").textContent="User Management";$("extra").innerHTML="";$("list").className="";
+ $("q").style.display="none";$("add").textContent="+ Create User";$("add").style.display=authOn()&&isAdmin()?"":"none";
+ if(!isAdmin()){$("list").innerHTML='<div class="empty">Only an Admin can manage users</div>';return}
+ if(!authOn()){
+  $("list").innerHTML=`<div class="voucher-card"><div class="voucher-title">Enable Login</div><div style="padding:16px 18px;font-size:13px;color:#475069">Create the Admin account first. After this, the app asks for a username and password every time it is opened. Admin can see all companies and create other users with access to selected companies only.</div><div class="voucher-grid"><div><label>Admin Username *</label><input id="u_name" value="admin"></div><div><label>Password *</label><input id="u_pw" type="password"></div><div><label>Confirm Password *</label><input id="u_pw2" type="password"></div></div><div class="voucher-actions"><button type="button" style="background:#3151d3" onclick="uEnable()">Enable Login</button></div></div>`;
+  return;
+ }
+ const f=RS.uf;let form="";
+ if(f){
+  const u=f.id?DB.users.find(x=>x.id===f.id):{name:"",role:"user",companies:[]};
+  form=`<div class="voucher-card" style="margin-bottom:14px"><div class="voucher-title">${f.id?"Edit User":"Create User"}</div><div class="voucher-grid"><div><label>Username *</label><input id="u_name" value="${esc(u.name)}"></div><div><label>${f.id?"New Password (leave blank to keep)":"Password *"}</label><input id="u_pw" type="password" autocomplete="new-password"></div><div><label>Role</label><select id="u_role" onchange="uRole()"><option value="user" ${u.role!=="admin"?"selected":""}>User (selected companies only)</option><option value="admin" ${u.role==="admin"?"selected":""}>Admin (all companies + user management)</option></select></div><div class="wide" id="u_cowrap"><label>Companies this user can open *</label><div class="ucos">${DB.company.length?DB.company.map(c=>`<label><input type="checkbox" class="ucb" value="${c.id}" ${(u.companies||[]).includes(c.id)?"checked":""}>${esc(c.name)}</label>`).join(""):'<span style="color:#6b7690;font-size:13px">No companies created yet</span>'}</div></div></div><div class="voucher-actions"><button type="button" class="g" onclick="uCancel()">Cancel</button><button type="button" style="background:#3151d3" onclick="uSave()">Save User</button></div></div>`;
+ }
+ const rows=DB.users.map(u=>[esc(u.name)+(u.id===AUTH.uid?" <small style='color:#6b7690'>(you)</small>":""),u.role==="admin"?"Admin":"User",u.role==="admin"?"All companies":(esc(DB.company.filter(c=>(u.companies||[]).includes(c.id)).map(c=>c.name).join(", "))||"<span style='color:#d6264f'>No company assigned</span>"),`<button class="e" onclick="uForm('${u.id}')">Edit</button> ${u.id===AUTH.uid?"":`<button class="d" onclick="uDel('${u.id}')">Delete</button>`}`]);
+ $("list").innerHTML=form+tbl(["Username","Role","Companies","Action"],rows,DB.users.length+" user(s)");
+ uRole();
+}
+function uRole(){const r=$("u_role"),w=$("u_cowrap");if(r&&w)w.style.display=r.value==="admin"?"none":""}
+function uForm(id){RS.uf={id:id||null};render();setTimeout(()=>{const e=$("u_name");if(e)e.focus()},50)}
+function uCancel(){RS.uf=null;render()}
+function uEnable(){
+ const n=($("u_name").value||"").trim(),a=$("u_pw").value||"",b=$("u_pw2").value||"";
+ if(!n){alert("Username is required");return}
+ if(a.length<4){alert("Password must be at least 4 characters");return}
+ if(a!==b){alert("Passwords do not match");return}
+ const u={id:uid(),name:n,ph:pwHash(a),role:"admin",companies:[]};
+ DB.users=[u];AUTH.uid=u.id;try{sessionStorage.setItem("acc_sess",u.id)}catch(e){}
+ save();render();
+}
+function uSave(){
+ const f=RS.uf;if(!f)return;
+ const n=($("u_name").value||"").trim(),pw=$("u_pw").value||"",role=$("u_role").value;
+ const cos=[...document.querySelectorAll(".ucb")].filter(e=>e.checked).map(e=>e.value);
+ const old=f.id?DB.users.find(x=>x.id===f.id):null;
+ if(!n){alert("Username is required");return}
+ if(DB.users.some(x=>x.id!==f.id&&x.name.toLowerCase()===n.toLowerCase())){alert("Username already exists");return}
+ if(!old&&pw.length<4){alert("Password must be at least 4 characters");return}
+ if(pw&&pw.length<4){alert("Password must be at least 4 characters");return}
+ if(role==="user"&&!cos.length){alert("Select at least one company for this user");return}
+ if(old&&old.role==="admin"&&role!=="admin"&&DB.users.filter(x=>x.role==="admin").length<2){alert("At least one Admin is required");return}
+ if(old){old.name=n;old.role=role;old.companies=role==="admin"?[]:cos;if(pw)old.ph=pwHash(pw)}
+ else DB.users.push({id:uid(),name:n,ph:pwHash(pw),role,companies:role==="admin"?[]:cos});
+ save();RS.uf=null;
+ if(old&&old.id===AUTH.uid&&role!=="admin"){cur="dashboard"}
+ render();
+}
+function uDel(id){
+ const u=DB.users.find(x=>x.id===id);if(!u||id===AUTH.uid)return;
+ if(u.role==="admin"&&DB.users.filter(x=>x.role==="admin").length<2){alert("At least one Admin is required");return}
+ if(!confirm("Delete user "+u.name+"?"))return;
+ DB.users=DB.users.filter(x=>x.id!==id);save();render();
+}
+
 function saveForm(){
  const m=M[cur],rec={};
  for(const f of m.f){
@@ -1776,7 +1887,7 @@ function del(id){
  save();render();
 }
 
-$("add").onclick=()=>{if(VK[cur]&&RS.vf){RS.vf=null;render();return}if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
+$("add").onclick=()=>{if(cur==="users"){uForm();return}if(VK[cur]&&RS.vf){RS.vf=null;render();return}if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
 document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}if(e.key==="F2"&&VK[cur]&&RS.vf){e.preventDefault();voucherSave()}});
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
