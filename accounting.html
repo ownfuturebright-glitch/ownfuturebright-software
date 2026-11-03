@@ -898,7 +898,7 @@ async function bkReconnect(){
 }
 async function bkNow(){const ok=await bkWrite();if(ok)toast("Backup saved in folder: "+BK.name);else alert("Backup failed. Please reconnect the folder.");render()}
 let bkTimer;
-function bkAuto(){if(BK.state!=="ready"&&GD.state!=="ready")return;clearTimeout(bkTimer);bkTimer=setTimeout(async()=>{if(BK.state==="ready")await bkWrite();if(GD.state==="ready")await gdBackup();if(cur==="backup")render()},1200)}
+function bkAuto(){ghAuto();if(BK.state!=="ready"&&GD.state!=="ready")return;clearTimeout(bkTimer);bkTimer=setTimeout(async()=>{if(BK.state==="ready")await bkWrite();if(GD.state==="ready")await gdBackup();if(cur==="backup")render()},1200)}
 /* ===== Google Drive backup (browser sign-in, drive.file scope) ===== */
 const GD={cid:"",tok:"",exp:0,state:"none",mail:"",last:"",err:"",tc:null,fid:"",fold:"",warned:0};
 try{GD.cid=localStorage.getItem("acc_gd_cid")||"";GD.last=localStorage.getItem("acc_gd_last")||"";GD.fid=localStorage.getItem("acc_gd_file")||"";GD.fold=localStorage.getItem("acc_gd_folder")||""}catch(e){}
@@ -981,7 +981,8 @@ async function ghApi(url,o,allow404){
  throw new Error(r.status===401?"Token is invalid or expired":(r.status===403||r.status===404)?"No access to the repository. Check the repository name and that the token has Contents: Read and write":"GitHub error "+r.status+(m?": "+m:""));
 }
 async function ghBackup(force){
- if(!ghReady()||GH.busy)return false;
+ if(!ghReady())return false;
+ if(GH.busy){GH.again=true;return false}
  const js=bkJson(),h=ghHash(js.replace(/"exportedAt":\s*"[^"]*",?/,""));
  if(!force&&h===GH.hash)return true;
  GH.busy=true;
@@ -991,8 +992,12 @@ async function ghBackup(force){
   await ghApi(ghUrl(),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Auto backup "+new Date().toISOString(),content:ghB64(js),...(sha?{sha}:{})})});
   GH.hash=h;GH.err="";GH.last=new Date().toLocaleString("en-IN");lsSet("acc_gh_hash",h);lsSet("acc_gh_last",GH.last);return true;
  }catch(e){GH.err=e.message||"Backup failed";return false}
- finally{GH.busy=false}
+ finally{GH.busy=false;if(GH.again){GH.again=false;setTimeout(()=>ghBackup(false),2000)}}
 }
+let ghTimer;
+function ghAuto(){if(!ghReady())return;clearTimeout(ghTimer);ghTimer=setTimeout(async()=>{await ghBackup(false);if(cur==="backup")render()},20000)}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&ghReady()){clearTimeout(ghTimer);ghBackup(false)}});
+setTimeout(()=>{if(ghReady())ghBackup(false)},5000);
 function ghSetRepo(v){GH.repo=v.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/+$/,"");GH.ok=false;GH.err="";GH.hash="";lsSet("acc_gh_repo",GH.repo);lsSet("acc_gh_ok","0");lsSet("acc_gh_hash","")}
 function ghSetTok(v){v=v.trim();if(!v)return;GH.tok=v;GH.ok=false;GH.err="";lsSet("acc_gh_tok",GH.tok);lsSet("acc_gh_ok","0")}
 function togVis(id,b){const e=$(id);if(!e)return;const h=e.type==="password";e.type=h?"text":"password";b.textContent=h?"Hide":"Show"}
@@ -1016,9 +1021,9 @@ async function ghRestore(){
 function ghDisconnect(){GH.tok="";GH.ok=false;GH.err="";lsSet("acc_gh_tok","");lsSet("acc_gh_ok","0");render()}
 function ghCardHtml(){
  const rd=ghReady();
- const box=rd?`<div class="bst ok">● Connected • Auto backup every 10 minutes</div><div class="bnote">Repository: <b>${esc(GH.repo)}</b> (private)<br>File: <b>${esc(GH.path)}</b></div>${GH.err?`<div class="bst wn">● Last backup failed: ${esc(GH.err)}</div>`:""}`
+ const box=rd?`<div class="bst ok">● Connected • Auto backup is ON</div><div class="bnote">Repository: <b>${esc(GH.repo)}</b> (private)<br>File: <b>${esc(GH.path)}</b></div>${GH.err?`<div class="bst wn">● Last backup failed: ${esc(GH.err)}</div>`:""}`
   :GH.err?`<div class="bst wn">● ${esc(GH.err)}</div>`:`<div class="bst no">● Not connected</div>`;
- return `<div class="bcard"><div class="bico" style="background:#eceef3;color:#24292f">${SVGI(IC_UP)}</div><h3>GitHub Auto Backup</h3><p>Every 10 minutes (only when your data has changed) the latest backup is saved to your private GitHub repository. Older versions stay in the commit history. The software must be open in the browser for this to run.</p>${box}${GH.last?`<div class="bnote">Last backup: ${esc(GH.last)}</div>`:""}
+ return `<div class="bcard"><div class="bico" style="background:#eceef3;color:#24292f">${SVGI(IC_UP)}</div><h3>GitHub Auto Backup</h3><p>Automatic: about 20 seconds after you save an entry, and every 10 minutes, the latest backup is saved to your private GitHub repository (only when your data has changed). Older versions stay in the commit history. The software must be open in the browser for this to run.</p>${box}${GH.last?`<div class="bnote">Last backup: ${esc(GH.last)}</div>`:""}
  <label style="margin-top:12px">Private repository (owner/name)</label><input id="ghrepo" value="${esc(GH.repo)}" placeholder="ownfuturebright-glitch/software-backup" onchange="ghSetRepo(this.value)" style="font-size:12px">
  <label style="margin-top:10px">GitHub token</label><div style="display:flex;gap:6px;align-items:center"><input id="ghtok" type="password" value="${esc(GH.tok)}" placeholder="github_pat_..." onchange="ghSetTok(this.value)" style="font-size:12px;flex:1;min-width:0"><button type="button" class="ol" style="flex:0 0 auto;padding:9px 12px;font-size:12px" onclick="togVis('ghtok',this)">Show</button></div>
  <details style="margin-top:8px;font-size:12px;color:#5b6784;line-height:1.7"><summary style="cursor:pointer;color:#3d5afe;font-weight:600">How to set this up</summary><ol style="margin:6px 0 0 16px;padding:0"><li>On GitHub create a new <b>private</b> repository (for example software-backup).</li><li>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.</li><li>Repository access: <b>Only select repositories</b> and choose that private repository.</li><li>Repository permissions → <b>Contents: Read and write</b>. Generate the token and copy it.</li><li>Paste the repository name and the token above, then click Connect GitHub.</li></ol></details>
