@@ -963,8 +963,64 @@ async function gdBackup(){
 }
 async function gdNow(){const ok=await gdBackup();if(ok)toast("Backup saved to Google Drive");else alert(GD.state==="expired"?"Your Google session expired. Click Reconnect Drive.":"Backup failed: "+(GD.err||"unknown error"));render()}
 function gdDisconnect(){try{if(GD.tok&&window.google)google.accounts.oauth2.revoke(GD.tok)}catch(e){}GD.tok="";GD.mail="";GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";render()}
-async function bkTick(){if(BK.state==="ready")await bkWrite();if(GD.tok)await gdBackup();if(cur==="backup")render()}
+async function bkTick(){if(BK.state==="ready")await bkWrite();if(GD.tok)await gdBackup();if(ghReady())await ghBackup(false);if(cur==="backup")render()}
 setInterval(bkTick,10*60*1000);
+/* ===== GitHub backup (private repo + fine-grained token) ===== */
+const GH={tok:"",repo:"",ok:false,last:"",err:"",hash:"",busy:false,path:"backup/accounts_backup_latest.json"};
+try{GH.tok=localStorage.getItem("acc_gh_tok")||"";GH.repo=localStorage.getItem("acc_gh_repo")||"";GH.ok=localStorage.getItem("acc_gh_ok")==="1";GH.last=localStorage.getItem("acc_gh_last")||"";GH.hash=localStorage.getItem("acc_gh_hash")||""}catch(e){}
+const ghReady=()=>!!(GH.tok&&GH.repo&&GH.ok);
+const ghHash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return String(h>>>0)+":"+s.length};
+const ghB64=s=>{const b=new TextEncoder().encode(s);let o="";for(let i=0;i<b.length;i+=32768)o+=String.fromCharCode.apply(null,b.subarray(i,i+32768));return btoa(o)};
+const ghUrl=()=>"https://api.github.com/repos/"+GH.repo+"/contents/"+GH.path.split("/").map(encodeURIComponent).join("/");
+async function ghApi(url,o,allow404){
+ o=o||{};
+ const r=await fetch(url,{...o,headers:{Authorization:"Bearer "+GH.tok,Accept:"application/vnd.github+json",...(o.headers||{})}});
+ if(r.ok||(allow404&&r.status===404))return r;
+ let m="";try{m=(await r.json()).message||""}catch(e){}
+ throw new Error(r.status===401?"Token is invalid or expired":(r.status===403||r.status===404)?"No access to the repository. Check the repository name and that the token has Contents: Read and write":"GitHub error "+r.status+(m?": "+m:""));
+}
+async function ghBackup(force){
+ if(!ghReady()||GH.busy)return false;
+ const js=bkJson(),h=ghHash(js.replace(/"exportedAt":\s*"[^"]*",?/,""));
+ if(!force&&h===GH.hash)return true;
+ GH.busy=true;
+ try{
+  const g=await ghApi(ghUrl(),{},true);
+  const sha=g.status===404?undefined:(await g.json()).sha;
+  await ghApi(ghUrl(),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Auto backup "+new Date().toISOString(),content:ghB64(js),...(sha?{sha}:{})})});
+  GH.hash=h;GH.err="";GH.last=new Date().toLocaleString("en-IN");lsSet("acc_gh_hash",h);lsSet("acc_gh_last",GH.last);return true;
+ }catch(e){GH.err=e.message||"Backup failed";return false}
+ finally{GH.busy=false}
+}
+function ghSetRepo(v){GH.repo=v.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/+$/,"");GH.ok=false;GH.err="";GH.hash="";lsSet("acc_gh_repo",GH.repo);lsSet("acc_gh_ok","0");lsSet("acc_gh_hash","");render()}
+function ghSetTok(v){GH.tok=v.trim();GH.ok=false;GH.err="";lsSet("acc_gh_tok",GH.tok);lsSet("acc_gh_ok","0");render()}
+async function ghConnect(){
+ if(!GH.repo||!GH.tok){alert("Enter the repository name and the token first");return}
+ try{
+  const r=await(await ghApi("https://api.github.com/repos/"+GH.repo)).json();
+  if(!r.private){GH.ok=false;lsSet("acc_gh_ok","0");GH.err="This repository is PUBLIC. Your accounts data would be visible to everyone. Create a PRIVATE repository and use that.";render();return}
+  GH.ok=true;GH.err="";lsSet("acc_gh_ok","1");
+  if(await ghBackup(true))toast("Backup saved to GitHub");
+ }catch(e){GH.ok=false;lsSet("acc_gh_ok","0");GH.err=e.message}
+ render();
+}
+async function ghNow(){const ok=await ghBackup(true);if(ok)toast("Backup saved to GitHub");else alert("Backup failed: "+(GH.err||"unknown error"));render()}
+async function ghRestore(){
+ if(!ghReady()){alert("Connect GitHub first");return}
+ try{const r=await ghApi(ghUrl(),{headers:{Accept:"application/vnd.github.raw+json"}});const t=await r.text();bkpLoad(new File([t],"accounts_backup_latest.json",{type:"application/json"}))}
+ catch(e){alert("Could not fetch the backup: "+e.message)}
+}
+function ghDisconnect(){GH.tok="";GH.ok=false;GH.err="";lsSet("acc_gh_tok","");lsSet("acc_gh_ok","0");render()}
+function ghCardHtml(){
+ const rd=ghReady();
+ const box=rd?`<div class="bst ok">● Connected • Auto backup every 10 minutes</div><div class="bnote">Repository: <b>${esc(GH.repo)}</b> (private)<br>File: <b>${esc(GH.path)}</b></div>${GH.err?`<div class="bst wn">● Last backup failed: ${esc(GH.err)}</div>`:""}`
+  :GH.err?`<div class="bst wn">● ${esc(GH.err)}</div>`:`<div class="bst no">● Not connected</div>`;
+ return `<div class="bcard"><div class="bico" style="background:#eceef3;color:#24292f">${SVGI(IC_UP)}</div><h3>GitHub Auto Backup</h3><p>Every 10 minutes (only when your data has changed) the latest backup is saved to your private GitHub repository. Older versions stay in the commit history. The software must be open in the browser for this to run.</p>${box}${GH.last?`<div class="bnote">Last backup: ${esc(GH.last)}</div>`:""}
+ <label style="margin-top:12px">Private repository (owner/name)</label><input value="${esc(GH.repo)}" placeholder="ownfuturebright-glitch/software-backup" onchange="ghSetRepo(this.value)" style="font-size:12px">
+ <label style="margin-top:10px">GitHub token</label><input type="password" value="" placeholder="${GH.tok?"Token saved (hidden). Paste a new one to replace":"github_pat_..."}" onchange="ghSetTok(this.value)" style="font-size:12px">
+ <details style="margin-top:8px;font-size:12px;color:#5b6784;line-height:1.7"><summary style="cursor:pointer;color:#3d5afe;font-weight:600">How to set this up</summary><ol style="margin:6px 0 0 16px;padding:0"><li>On GitHub create a new <b>private</b> repository (for example software-backup).</li><li>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.</li><li>Repository access: <b>Only select repositories</b> and choose that private repository.</li><li>Repository permissions → <b>Contents: Read and write</b>. Generate the token and copy it.</li><li>Paste the repository name and the token above, then click Connect GitHub.</li></ol></details>
+ <div class="bfoot"><button style="background:#24292f" ${GH.repo&&GH.tok?"":"disabled"} onclick="ghConnect()">${SVGI(IC_UP2,16)} ${rd?"Reconnect":"Connect GitHub"}</button><button class="ol" ${rd?"":"disabled"} onclick="ghNow()">${SVGI(IC_FILE,16)} Backup Now</button><button class="ol" ${rd?"":"disabled"} onclick="ghRestore()">${SVGI(IC_UP2,16)} Restore latest</button></div>${GH.tok?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="ghDisconnect()">Disconnect</a>`:""}</div>`;
+}
 function gdCardHtml(){
  const st=GD.state,ready=st==="ready";
  const box=ready?`<div class="bst ok">● Connected • Instant backup active</div><div class="bnote">Google account: <b>${esc(GD.mail||"-")}</b><br>Drive folder: <b>Accounts Backup</b></div>`
@@ -993,6 +1049,7 @@ R.backup={t:"Data Backup & Restore",f(){
  return `<div class="sc"><div class="hd2" style="padding:20px 24px"><div class="hico" style="color:#3d5afe">${SVGI(IC_FILE,24)}</div><div style="flex:1"><b style="font-size:19px">Data Backup &amp; Restore</b><div style="font-size:14px;color:#5b6784;margin-top:4px">Keep your backup file safe before uninstalling the software or changing your PC.</div></div><span class="bdg a" style="font-size:12px;padding:8px 14px">API credentials excluded</span></div></div>
  <div class="bk3">
  ${gdCardHtml()}
+ ${ghCardHtml()}
  <div class="bcard"><div class="bico" style="background:#fff0d9;color:#d98300">${SVGI(IC_UP)}</div><h3>Folder Instant Backup</h3><p>Every time you save an entry, and every 10 minutes, the backup file in your chosen folder is updated automatically. A separate copy for each day is also kept. Choose a Google Drive or OneDrive synced folder to keep a cloud copy.</p>${box}${BK.last?`<div class="bnote">Last backup: ${esc(BK.last)}</div>`:""}<div class="bfoot"><button style="background:#2f4fd8" ${st==="unsupported"?"disabled":""} onclick="${st==="need"?"bkReconnect()":"bkChoose()"}">${SVGI(IC_UP2,16)} ${st==="need"?"Reconnect Folder":st==="ready"?"Change Folder":"Choose Folder"}</button><button class="ol" ${ready?"":"disabled"} onclick="bkNow()">${SVGI(IC_FILE,16)} Backup Now</button></div></div>
  <div class="bcard"><div class="bico" style="background:#e8edff;color:#3d5afe">${SVGI(IC_FILE)}</div><h3>Create Backup</h3><p>Download all companies, masters, invoices, returns, vouchers, ledgers and software settings in one file.</p><div class="bfoot"><button style="background:#2f4fd8;flex:0 1 auto" onclick="bkpDl()">${SVGI(IC_FILE,16)} Create &amp; Download Backup</button></div></div>
  <div class="bcard"><div class="bico" style="background:#e3f7ec;color:#14803c">${SVGI(IC_UP2)}</div><h3>Restore Backup</h3><p>After reinstalling, choose your saved backup file. Existing accounting data is replaced after you confirm. An ownfuturebright backup file imports its companies, parties, items and all vouchers.</p>${f?`<div class="bnote" style="margin-top:12px">Selected file: <b>${esc(f.name)}</b></div>`:""}<div class="bfoot" style="flex-direction:column"><input id="bkfile" type="file" accept=".json,application/json" style="display:none" onchange="bkPick(this.files[0])"><button class="ol" onclick="document.getElementById('bkfile').click()">${SVGI(IC_UP2,16)} Choose Backup File</button><button style="background:#2f4fd8" ${f?"":"disabled"} onclick="bkRestore()">${SVGI(IC_FILE,16)} Restore Now</button></div></div>
