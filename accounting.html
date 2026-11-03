@@ -904,7 +904,7 @@ const GD={cid:"",tok:"",exp:0,state:"none",mail:"",last:"",err:"",tc:null,fid:""
 try{GD.cid=localStorage.getItem("acc_gd_cid")||"";GD.last=localStorage.getItem("acc_gd_last")||"";GD.fid=localStorage.getItem("acc_gd_file")||"";GD.fold=localStorage.getItem("acc_gd_folder")||""}catch(e){}
 GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
-function gdSetCid(v){GD.cid=v.trim();lsSet("acc_gd_cid",GD.cid);GD.tok="";GD.tc=null;GD.fid="";GD.fold="";lsSet("acc_gd_file","");lsSet("acc_gd_folder","");GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";render()}
+function gdSetCid(v,q){GD.cid=v.trim();lsSet("acc_gd_cid",GD.cid);GD.tok="";GD.tc=null;GD.fid="";GD.fold="";lsSet("acc_gd_file","");lsSet("acc_gd_folder","");GD.state=location.protocol==="file:"?"insecure":GD.cid?"none":"nocid";if(!q)render()}
 const gdLoad=()=>new Promise((res,rej)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return res();const t=document.createElement("script");t.src="https://accounts.google.com/gsi/client";t.onload=()=>res();t.onerror=()=>rej(new Error("Could not load Google sign-in. Please check your internet connection."));document.head.appendChild(t)});
 async function gdApi(url,o){
  o=o||{};const r=await fetch(url,{...o,headers:{Authorization:"Bearer "+GD.tok,...(o.headers||{})}});
@@ -913,6 +913,7 @@ async function gdApi(url,o){
  return r.status===204?{}:r.json();
 }
 async function gdConnect(){
+ const ce=$("gdcid");if(ce&&ce.value.trim()&&ce.value.trim()!==GD.cid)gdSetCid(ce.value,1);
  if(!GD.cid){alert("Enter your Google Client ID first");return}
  try{await gdLoad()}catch(e){alert(e.message);return}
  GD.tc=google.accounts.oauth2.initTokenClient({client_id:GD.cid,scope:"https://www.googleapis.com/auth/drive.file",
@@ -992,16 +993,18 @@ async function ghBackup(force){
  }catch(e){GH.err=e.message||"Backup failed";return false}
  finally{GH.busy=false}
 }
-function ghSetRepo(v){GH.repo=v.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/+$/,"");GH.ok=false;GH.err="";GH.hash="";lsSet("acc_gh_repo",GH.repo);lsSet("acc_gh_ok","0");lsSet("acc_gh_hash","");render()}
-function ghSetTok(v){GH.tok=v.trim();GH.ok=false;GH.err="";lsSet("acc_gh_tok",GH.tok);lsSet("acc_gh_ok","0");render()}
+function ghSetRepo(v){GH.repo=v.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/+$/,"");GH.ok=false;GH.err="";GH.hash="";lsSet("acc_gh_repo",GH.repo);lsSet("acc_gh_ok","0");lsSet("acc_gh_hash","")}
+function ghSetTok(v){v=v.trim();if(!v)return;GH.tok=v;GH.ok=false;GH.err="";lsSet("acc_gh_tok",GH.tok);lsSet("acc_gh_ok","0")}
+function togVis(id,b){const e=$(id);if(!e)return;const h=e.type==="password";e.type=h?"text":"password";b.textContent=h?"Hide":"Show"}
 async function ghConnect(){
+ const re=$("ghrepo"),te=$("ghtok");if(re&&re.value.trim())ghSetRepo(re.value);if(te&&te.value.trim())ghSetTok(te.value);
  if(!GH.repo||!GH.tok){alert("Enter the repository name and the token first");return}
  try{
   const r=await(await ghApi("https://api.github.com/repos/"+GH.repo)).json();
   if(!r.private){GH.ok=false;lsSet("acc_gh_ok","0");GH.err="This repository is PUBLIC. Your accounts data would be visible to everyone. Create a PRIVATE repository and use that.";render();return}
   GH.ok=true;GH.err="";lsSet("acc_gh_ok","1");
   if(await ghBackup(true))toast("Backup saved to GitHub");
- }catch(e){GH.ok=false;lsSet("acc_gh_ok","0");GH.err=e.message}
+ }catch(e){GH.ok=false;lsSet("acc_gh_ok","0");GH.err=e.message;alert("GitHub connect failed: "+e.message)}
  render();
 }
 async function ghNow(){const ok=await ghBackup(true);if(ok)toast("Backup saved to GitHub");else alert("Backup failed: "+(GH.err||"unknown error"));render()}
@@ -1016,10 +1019,10 @@ function ghCardHtml(){
  const box=rd?`<div class="bst ok">● Connected • Auto backup every 10 minutes</div><div class="bnote">Repository: <b>${esc(GH.repo)}</b> (private)<br>File: <b>${esc(GH.path)}</b></div>${GH.err?`<div class="bst wn">● Last backup failed: ${esc(GH.err)}</div>`:""}`
   :GH.err?`<div class="bst wn">● ${esc(GH.err)}</div>`:`<div class="bst no">● Not connected</div>`;
  return `<div class="bcard"><div class="bico" style="background:#eceef3;color:#24292f">${SVGI(IC_UP)}</div><h3>GitHub Auto Backup</h3><p>Every 10 minutes (only when your data has changed) the latest backup is saved to your private GitHub repository. Older versions stay in the commit history. The software must be open in the browser for this to run.</p>${box}${GH.last?`<div class="bnote">Last backup: ${esc(GH.last)}</div>`:""}
- <label style="margin-top:12px">Private repository (owner/name)</label><input value="${esc(GH.repo)}" placeholder="ownfuturebright-glitch/software-backup" onchange="ghSetRepo(this.value)" style="font-size:12px">
- <label style="margin-top:10px">GitHub token</label><input type="password" value="" placeholder="${GH.tok?"Token saved (hidden). Paste a new one to replace":"github_pat_..."}" onchange="ghSetTok(this.value)" style="font-size:12px">
+ <label style="margin-top:12px">Private repository (owner/name)</label><input id="ghrepo" value="${esc(GH.repo)}" placeholder="ownfuturebright-glitch/software-backup" onchange="ghSetRepo(this.value)" style="font-size:12px">
+ <label style="margin-top:10px">GitHub token</label><div style="display:flex;gap:6px;align-items:center"><input id="ghtok" type="password" value="${esc(GH.tok)}" placeholder="github_pat_..." onchange="ghSetTok(this.value)" style="font-size:12px;flex:1;min-width:0"><button type="button" class="ol" style="flex:0 0 auto;padding:9px 12px;font-size:12px" onclick="togVis('ghtok',this)">Show</button></div>
  <details style="margin-top:8px;font-size:12px;color:#5b6784;line-height:1.7"><summary style="cursor:pointer;color:#3d5afe;font-weight:600">How to set this up</summary><ol style="margin:6px 0 0 16px;padding:0"><li>On GitHub create a new <b>private</b> repository (for example software-backup).</li><li>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.</li><li>Repository access: <b>Only select repositories</b> and choose that private repository.</li><li>Repository permissions → <b>Contents: Read and write</b>. Generate the token and copy it.</li><li>Paste the repository name and the token above, then click Connect GitHub.</li></ol></details>
- <div class="bfoot"><button style="background:#24292f" ${GH.repo&&GH.tok?"":"disabled"} onclick="ghConnect()">${SVGI(IC_UP2,16)} ${rd?"Reconnect":"Connect GitHub"}</button><button class="ol" ${rd?"":"disabled"} onclick="ghNow()">${SVGI(IC_FILE,16)} Backup Now</button><button class="ol" ${rd?"":"disabled"} onclick="ghRestore()">${SVGI(IC_UP2,16)} Restore latest</button></div>${GH.tok?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="ghDisconnect()">Disconnect</a>`:""}</div>`;
+ <div class="bfoot"><button style="background:#24292f" onclick="ghConnect()">${SVGI(IC_UP2,16)} ${rd?"Update & Reconnect":"Connect GitHub"}</button><button class="ol" ${rd?"":"disabled"} onclick="ghNow()">${SVGI(IC_FILE,16)} Backup Now</button><button class="ol" ${rd?"":"disabled"} onclick="ghRestore()">${SVGI(IC_UP2,16)} Restore latest</button></div>${GH.tok?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="ghDisconnect()">Disconnect</a>`:""}</div>`;
 }
 function gdCardHtml(){
  const st=GD.state,ready=st==="ready";
@@ -1028,11 +1031,11 @@ function gdCardHtml(){
   :st==="expired"?`<div class="bst wn">● Session expired. Click Reconnect Drive.</div>`
   :st==="nocid"?`<div class="bst no">● Not connected. Enter your Google Client ID below.</div>`
   :st==="error"?`<div class="bst wn">● Could not connect: ${esc(GD.err)}</div>`:`<div class="bst no">● Not connected</div>`;
- const canConnect=GD.cid&&st!=="insecure";
+ const canConnect=st!=="insecure";
  return `<div class="bcard"><div class="bico" style="background:#e7f0ff;color:#1a73e8">${SVGI(IC_UP)}</div><h3>Google Drive Instant Backup</h3><p>Every time you save an entry, and every 10 minutes, the backup file in your Google Drive folder is updated automatically. A separate copy for each day is also kept.</p>${box}${GD.last?`<div class="bnote">Last backup: ${esc(GD.last)}</div>`:""}
- <label style="margin-top:12px">Google OAuth Client ID</label><input value="${esc(GD.cid)}" placeholder="1234567890-abc.apps.googleusercontent.com" onchange="gdSetCid(this.value)" style="font-size:12px">
+ <label style="margin-top:12px">Google OAuth Client ID</label><div style="display:flex;gap:6px;align-items:center"><input id="gdcid" type="text" value="${esc(GD.cid)}" placeholder="1234567890-abc.apps.googleusercontent.com" onchange="gdSetCid(this.value,1)" style="font-size:12px;flex:1;min-width:0"><button type="button" class="ol" style="flex:0 0 auto;padding:9px 12px;font-size:12px" onclick="togVis('gdcid',this)">Hide</button></div>
  <details style="margin-top:8px;font-size:12px;color:#5b6784;line-height:1.7"><summary style="cursor:pointer;color:#3d5afe;font-weight:600">How to get a Client ID</summary><ol style="margin:6px 0 0 16px;padding:0"><li>Open console.cloud.google.com and create a project.</li><li>APIs &amp; Services → Library → enable "Google Drive API".</li><li>OAuth consent screen → External → add your Gmail address as a test user.</li><li>Credentials → Create credentials → OAuth client ID → Web application.</li><li>Under "Authorized JavaScript origins" add the address where you open this app (for example http://localhost:8080).</li><li>Copy the Client ID and paste it above.</li></ol></details>
- <div class="bfoot"><button style="background:#2f4fd8" ${canConnect?"":"disabled"} onclick="gdConnect()">${SVGI(IC_UP2,16)} ${st==="ready"?"Reconnect Drive":st==="expired"?"Reconnect Drive":"Connect Drive"}</button><button class="ol" ${ready?"":"disabled"} onclick="gdNow()">${SVGI(IC_FILE,16)} Backup Now</button></div>${ready?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="gdDisconnect()">Disconnect</a>`:""}</div>`;
+ <div class="bfoot"><button style="background:#2f4fd8" ${canConnect?"":"disabled"} onclick="gdConnect()">${SVGI(IC_UP2,16)} ${st==="ready"?"Update & Reconnect Drive":st==="expired"?"Reconnect Drive":"Connect Drive"}</button><button class="ol" ${ready?"":"disabled"} onclick="gdNow()">${SVGI(IC_FILE,16)} Backup Now</button></div>${ready?`<a class="lnk" style="margin-top:10px;display:inline-block" onclick="gdDisconnect()">Disconnect</a>`:""}</div>`;
 }
 RS.bkFile=null;
 function bkPick(f){RS.bkFile=f||null;render()}
