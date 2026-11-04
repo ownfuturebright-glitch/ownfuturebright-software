@@ -484,7 +484,7 @@ Object.keys(REG).forEach(rk=>{const mk=REG[rk],isT=!!M[mk].tx,isJ=mk==="journal"
     (!f.particular||searchPart.includes(f.particular.toLowerCase()))&&
     (!f.debit||dr>=(+f.debit||0))&&(!f.credit||cr>=(+f.credit||0));
   }).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
-  const ctl=bookPeriodControls()+regFilterHtml(rk);
+  const ctl=regFilterHtml(rk);
   let td=0,tc=0;
   const rows=l.map((x,i)=>{
    let party="",no="",particular="",dr=0,cr=0;
@@ -1662,13 +1662,20 @@ function blLoad(init){
 function blSync(){const S=RS.bl.sel;if(Object.keys(S).length)$("f_amount").value=Math.max(r2(Object.values(S).reduce((a,v)=>a+v,0)-(+(($("f_tds")||{}).value)||0)),0)}
 function blTick(id,on){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;if(on)RS.bl.sel[id]=b.pend;else delete RS.bl.sel[id];blSync();blDraw()}
 function blAmt(id,v){const b=RS.bl.list.find(z=>z.id===id);if(!b)return;RS.bl.sel[id]=Math.min(Math.max(+v||0,0),b.pend);blSync();blDraw()}
+function blAll(on){RS.bl.sel={};if(on)RS.bl.list.forEach(b=>{RS.bl.sel[b.id]=b.pend});blSync();blDraw()}
+function blAuto(){
+ const L=RS.bl.list;if(!L.length)return;
+ let left=r2((+$("f_amount").value||0)+(+(($("f_tds")||{}).value)||0));const sel={};
+ for(const b of L){if(left<=0.005)break;const u=Math.min(b.pend,left);sel[b.id]=r2(u);left=r2(left-u)}
+ RS.bl.sel=sel;blDraw();
+}
 function blDraw(){
  const el=$("bills");if(!el)return;
  const L=RS.bl.list,S=RS.bl.sel;
  if(!$("f_party").value){el.innerHTML="";return}
  if(!L.length){el.innerHTML='<div class="bnote" style="margin-top:12px">No pending bills for this party.</div>';return}
  const tot=Object.values(S).reduce((a,v)=>a+v,0);
- el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${b.date}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)} <small style="color:#6b7690">(Amount + TDS)</small></div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
+ el.innerHTML=`<div style="margin-top:14px;font-weight:600">Pending Bills <span class="bnote" style="font-weight:400">(tick the bills being settled — Amount updates automatically; typing an Amount ticks the oldest bills first)</span></div><div style="max-height:230px;overflow:auto;border:1px solid #e1e5f0;border-radius:8px;margin-top:6px"><table><tr><th><input type="checkbox" style="width:auto" ${L.length&&L.every(b=>S[b.id]!==undefined)?"checked":""} onchange="blAll(this.checked)" title="Select all"></th><th>Bill No.</th><th>Date</th><th>Bill Amount</th><th>Pending</th><th>Settle</th></tr>${L.map(b=>{const on=S[b.id]!==undefined;return `<tr><td><input type="checkbox" style="width:auto" ${on?"checked":""} onchange="blTick('${b.id}',this.checked)"></td><td>${esc(b.inv)}</td><td>${fd(b.date)}</td><td>${n2(b.total)}</td><td>${n2(b.pend)}</td><td><input type="number" step="any" style="width:110px;padding:4px 6px" ${on?"":"disabled"} value="${on?S[b.id]:""}" onchange="blAmt('${b.id}',this.value)"></td></tr>`}).join("")}</table></div><div class="tot">Selected bills total: ₹ ${n2(tot)} <small style="color:#6b7690">(Amount + TDS)</small></div><div class="bnote">Fully settled bills will not be shown again. If no bill is ticked, the amount is adjusted against the oldest pending bills automatically.</div>`;
 }
 
 async function bulkGstinValidate(){
@@ -1806,9 +1813,9 @@ function renderVoucher(){
  <div class="voucher-card"><div class="voucher-title">${isR?"Receipt":"Payment"} Details</div><div class="voucher-grid">
  <div>${lab("Voucher No.")}<div class="vno"><span id="f_pre">${esc(pre)}</span><input id="f_vno" value="${esc(no)}"></div></div>
  <div>${lab("Date")}<input id="f_date" type="date" value="${esc(rec.date||today())}"></div>
- <div>${lab(isR?"Received From Party":"Paid To Party",1)}<select id="f_party"><option value="">Select party</option>${DB.party.map(o=>`<option value="${o.id}" ${o.id===rec.party?"selected":""}>${esc(o.name)}</option>`).join("")}</select></div>
+ <div>${lab(isR?"Received From Party":"Paid To Party",1)}<select id="f_party" onchange="blLoad()"><option value="">Select party</option>${DB.party.map(o=>`<option value="${o.id}" ${o.id===rec.party?"selected":""}>${esc(o.name)}</option>`).join("")}</select></div>
  <div>${lab(isR?"Received In":"Paid From")}<select id="f_account">${accs.map(a=>`<option ${a===acc?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
- <div>${lab(isR?"Received Amount (₹)":"Payment Amount (₹)",1)}<input id="f_amount" class="vamt" type="number" step="any" placeholder="0.00" value="${esc(rec.amount??"")}"></div>
+ <div>${lab(isR?"Received Amount (₹)":"Payment Amount (₹)",1)}<input id="f_amount" class="vamt" type="number" step="any" placeholder="0.00" value="${esc(rec.amount??"")}" onchange="blAuto()"></div>
  <div>${lab("TDS Deducted (₹)")}<input id="f_tds" class="vamt" type="number" step="any" placeholder="0.00" value="${esc(rec.tds||"")}" onchange="blSync()"></div>
  <div class="wide">${lab("Narration / Remarks")}<textarea id="f_remark" rows="3" placeholder="${isR?"Receipt":"Payment"} details...">${esc(rec.remark||"")}</textarea></div></div>
  <div id="bills" style="padding:0 18px 8px"></div>
