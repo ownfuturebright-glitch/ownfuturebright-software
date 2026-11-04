@@ -248,7 +248,7 @@ const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
 const TG=["saleregister","purchaseregister","receiptregister","recv","pay"];
 function dashGo(i){
  const k=TG[i];
- if(k!=="recv"&&k!=="pay"){RS.from=RS.fy+"-04-01";RS.to=(RS.fy+1)+"-03-31"}
+ if(k!=="recv"&&k!=="pay"){RS.from=RS.fy+"-04-01";RS.to=(RS.fy+1)+"-03-31";RS.periodType="Financial Year";RS.periodFY=RS.fy;RS.periodFrom="";RS.periodTo=""}
  RS.back=null;if(RS.regf)delete RS.regf[k];cur=k;render();
 }
 function itemOf(id){RS.item=id;RS.back=null;cur="itemledger";render()}
@@ -667,6 +667,7 @@ const ACTS={
  einvl:[["gen","Generate E-Invoice (IRN)",EV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",EV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",EV+"CanIRN"],["prt","Print E-Invoice by IRN",EV+"PrintEInvByIRN"],["ewbirn","Generate e-Way Bill by IRN",EV+"GenEWaybyIRN"]],
  einvs:[["gen","Generate E-Invoice (IRN) - Linear",SV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",SV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",SV+"CanIRN"],["prt","Print E-Invoice by IRN",SV+"PrintEInvByIRN"]],
  ewbl:[["gen","Generate E-way Bill",EW+"GenEWB"],["genirn","Generate E-way Bill by IRN",EW+"GenEWaybyIRN"],["prta","E-Way Bill Print Part-A (Summary)",SP+"PrintEWB2"],["prtb","E-Way Bill Print Part-B (Details)",SP+"PrintEWBDetail2"],["veh","Update Vehicle Number",EW+"UpdateVehicle"],["can","Cancel E-way Bill",EW+"CancelEWB"],["rej","Reject E-way Bill",EW+"RejectEWB"],["con","Consolidated E-Way Bill",EW+"GenConsolidatedEWB"],["get","Get E-way Bill Detail",EW+"GetEWB"],["tr","Update Transporter Id",EW+"UpdateTransporter"],["ext","Extend Validity",EW+"ExtendValidity"]],
+ gstin:[["det","GSTIN Details (Party Master GSTIN Validate)",EV+"GetGSTINDetails"]],
  ewbs:[["gen","Generate E-way Bill","https://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/GenEWB"],["genirn","Generate E-way Bill by IRN",SW+"GenEWaybyIRN"],["prt","Print Part-A (Summary)",SP+"PrintEWB2"],["prtd","Print Part-B (Details)",SP+"PrintEWBDetail2"],["can","Cancel E-way Bill",SW+"CancelEWB"],["veh","Update Vehicle Number",SW+"UpdateVehicle"],["ext","Extend Validity",SW+"ExtendValidity"]]
 };
 RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
@@ -1234,7 +1235,7 @@ function urlSave(ke){
  save();RS.usaved=ke||"all";render();
 }
 R.urlset={t:"API URL Settings",f(){
- const G=[["einvs","E-Invoice Sandbox"],["einvl","E-Invoice Live"],["ewbs","E-Way Bill Sandbox"],["ewbl","E-Way Bill Live"]];
+ const G=[["einvs","E-Invoice Sandbox"],["einvl","E-Invoice Live"],["ewbs","E-Way Bill Sandbox"],["ewbl","E-Way Bill Live"],["gstin","GSTIN Lookup"]];
  const cur0=(ke,z)=>RS.ud[ke+"."+z[0]]??urlOf(ke,z);
  const box=([ke,g])=>{
   const dirty=Object.keys(RS.ud).some(k=>k.startsWith(ke+"."));
@@ -1686,21 +1687,21 @@ async function validatePartyGstin(id){
 }
 async function runGstinValidation(partyId){
  const parties=DB.party.filter(p=>(!partyId||p.id===partyId)&&String(p.gstin||"").trim());
- if(!parties.length){alert("Party Master में GSTIN वाली कोई party नहीं मिली.");return}
- const C=apiCfg();let cr={};try{cr=JSON.parse(C.live||"{}")}catch(e){alert("Other → Webtel API Settings में E-Invoice Live credentials का JSON ठीक करें.");return}
+ if(!parties.length){alert("No party with a GSTIN was found in Party Master.");return}
+ const C=apiCfg();let cr={};try{cr=JSON.parse(C.live||"{}")}catch(e){alert("Fix the E-Invoice Live credentials JSON in Other → Webtel API Setting.");return}
  const cd=cr.CDKey||cr.Cdkey||cr.cdkey,efU=cr.EFUserName,efP=cr.EFPassword,eiU=cr.EInvUserName||cr.EInvoiceUserName,eiP=cr.EInvPassword||cr.EInvoicePassword;
- if(!cd||!efU||!efP||!eiU||!eiP){alert("Bulk GSTIN lookup के लिए E-Invoice Live credentials में CDKey, EFUserName, EFPassword, EInvUserName और EInvPassword भरें.");return}
- if(!confirm((partyId?"इस पार्टी का GSTIN":""+parties.length+" GSTIN")+" की Webtel LIVE lookup होगी. जारी रखें?"))return;
- const box=document.getElementById("gstin_bulk_result");if(box)box.innerHTML='<div class="empty">GSTIN जाँचे जा रहे हैं… कृपया पेज बंद न करें.</div>';
+ if(!cd||!efU||!efP||!eiU||!eiP){alert("For GSTIN lookup, enter CDKey, EFUserName, EFPassword, EInvUserName and EInvPassword in the E-Invoice Live credentials (Other → Webtel API Setting).");return}
+ if(!confirm((partyId?"this party's GSTIN":""+parties.length+" GSTIN")+": a Webtel LIVE lookup will be done. Continue?"))return;
+ const box=document.getElementById("gstin_bulk_result");if(box)box.innerHTML='<div class="empty">Checking GSTIN… please do not close the page.</div>';
  let ok=0,fail=0,updated=0,rows=[];
  const first=(o,keys)=>{for(const k of keys){const v=findAny(o,k);if(v!=="")return String(v)}return ""};
  const findAny=(o,k)=>{if(!o||typeof o!=="object")return "";for(const [a,v] of Object.entries(o)){if(a.toLowerCase()===k.toLowerCase()&&v!==null&&typeof v!=="object"&&String(v).trim()!=="")return v}for(const v of Object.values(o)){const z=findAny(v,k);if(z!=="")return z}return ""};
  for(let i=0;i<parties.length;i++){
   const p=parties[i],gst=String(p.gstin).trim().toUpperCase();
   try{
-   const body={SearchGSTIN:gst,GSTIN:comp().gstin||gst,CDKey:cd,EInvUserName:eiU,EInvPassword:eiP,EFUserName:efU,EFPassword:efP};
-   const res=await fetch("https://einvlive.webtel.in/v1.03/GetGSTINDetails/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-   const raw=await res.text();let j;try{j=JSON.parse(raw)}catch(e){throw new Error("API ने JSON response नहीं दिया (HTTP "+res.status+")")}
+   const body={SearchGSTIN:gst,GSTIN:cr.GSTIN||comp().gstin||gst,CDKey:cd,EInvUserName:eiU,EInvPassword:eiP,EFUserName:efU,EFPassword:efP};
+   const res=await fetch(urlOf("gstin",ACTS.gstin[0]),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+   const raw=await res.text();let j;try{j=JSON.parse(raw)}catch(e){throw new Error("API did not return a JSON response (HTTP "+res.status+")")}
    if(!res.ok)throw new Error("HTTP "+res.status);
    const msg=first(j,["message","Message","ErrorMessage","error"]),status=first(j,["Status","status","IsValid","Valid"]);
    if(/invalid|not found|error|fail/i.test(msg)||status.toLowerCase()==="false"||status.toLowerCase()==="invalid")throw new Error(msg||"Invalid GSTIN");
