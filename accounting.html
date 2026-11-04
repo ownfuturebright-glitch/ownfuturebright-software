@@ -190,6 +190,11 @@ dialog.cmp.pty .cgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .rfb .ctl{padding:8px 0 0}
 .rfb .ctl div{min-width:130px}
 .pc small{display:block;font-size:11px;color:#6b7690;font-weight:400}
+
+/* Central database sign-in */
+.cloudov{position:fixed;inset:0;z-index:99999;background:rgba(8,16,38,.88);display:none;align-items:center;justify-content:center;padding:18px}
+.cloudbox{width:min(420px,100%);background:#fff;border-radius:16px;padding:26px;box-shadow:0 18px 60px #0005;color:#1d2433}
+.cloudbox h2{margin:8px 0}.cloudbox p{color:#667085;font-size:13px;line-height:1.5}.cloudbox label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}.cloudbox input{width:100%;padding:12px;border:1px solid #ccd2df;border-radius:8px;font-size:15px}.cloudbox button{width:100%;margin-top:16px;padding:12px;background:#3151d3;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer}.clouderr{color:#c62828;font-size:13px;margin-top:10px;white-space:pre-wrap}.cloudstatus{font-size:12px;color:#168044;margin-top:10px}
 </style>
 </head>
 <body>
@@ -200,8 +205,10 @@ dialog.cmp.pty .cgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
   <div id="extra"></div>
   <div class="card" id="list"></div>
 </main>
+<div id="cloudGate" class="cloudov"><div class="cloudbox"><div style="font-size:32px">☁️</div><h2>Accounting Central Database</h2><p>अपने accounting data को कंप्यूटर और मोबाइल पर सुरक्षित रूप से इस्तेमाल करने के लिए अपने Supabase account से login करें।</p><label>Email</label><input id="cloudEmail" type="email" autocomplete="username" placeholder="Your registered email"><label>Password</label><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Supabase user password"><button id="cloudLoginBtn" type="button" onclick="cloudLogin()">Login & Sync Data</button><div id="cloudError" class="clouderr"></div><div id="cloudStatus" class="cloudstatus"></div></div></div>
 <dialog id="pdlg" style="width:min(520px,94vw)"></dialog><dialog id="dlg"><h3 id="dt"></h3><div id="frm"></div><div class="btns"><button class="g" id="cx">Cancel</button><button id="sv">Save</button></div></dialog>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const UNITS=["Nos","Pcs","Kg","Gm","Ltr","Box","Mtr","Dozen"];
 const today=()=>new Date().toISOString().slice(0,10);
@@ -229,7 +236,56 @@ const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 let DB={};
 try{DB=JSON.parse(localStorage.getItem("acc_db")||"{}")}catch(e){DB={}}
 Object.keys(M).forEach(k=>DB[k]=DB[k]||[]);
-const save=()=>{try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}bkAuto()};
+const save=()=>{try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}bkAuto();cloudQueue()};
+/* ===== Supabase central database ===== */
+const CLOUD_URL="https://kgkvyusqnrdgdfzgunvq.supabase.co";
+const CLOUD_KEY="sb_publishable_hHo5LfAoIDXKcSp1_5pHKg_JPvJgkGX";
+let cloudClient=null,cloudUser=null,cloudReady=false,cloudDirty=false,cloudTimer=null,cloudStamp="",cloudPolling=null;
+function cloudMessage(msg,isError=false){const e=$("cloudError"),st=$("cloudStatus");if(e)e.textContent=isError?msg:"";if(st)st.textContent=isError?"":msg}
+function cloudGate(show){const g=$("cloudGate");if(g)g.style.display=show?"flex":"none"}
+function cloudSnapshot(){const x=JSON.parse(bkJson());return x.db}
+function cloudStoreLocal(){try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}}
+function cloudNormalize(obj){obj=obj&&typeof obj==="object"?obj:{};Object.keys(M).forEach(k=>{if(!Array.isArray(obj[k]))obj[k]=[]});obj.users=Array.isArray(obj.users)?obj.users:[];obj.settings=obj.settings||{};return obj}
+async function cloudLoadRow(){
+ const {data,error}=await cloudClient.from("accounting_data").select("data,updated_at").eq("user_id",cloudUser.id).maybeSingle();
+ if(error)throw error;
+ if(!data){
+  const initial=cloudSnapshot();
+  const {data:created,error:insErr}=await cloudClient.from("accounting_data").insert({user_id:cloudUser.id,data:initial}).select("updated_at").single();
+  if(insErr){if(insErr.code==="23505")return cloudLoadRow();throw insErr}
+  cloudStamp=created.updated_at||"";cloudReady=true;cloudDirty=false;cloudMessage("पुराना data पहली बार central database में सुरक्षित हो गया।");
+ }else{
+  const localApi=DB.settings&&DB.settings.api;
+  DB=cloudNormalize(data.data);
+  if(localApi){DB.settings=DB.settings||{};DB.settings.api=localApi}
+  cloudStoreLocal();cloudStamp=data.updated_at||"";cloudReady=true;cloudDirty=false;cloudMessage("Central database से data sync हो गया।");
+ }
+ render();
+}
+async function cloudLogin(){
+ const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value;
+ if(!email||!password){cloudMessage("Email और Password दोनों भरें।",true);return}
+ const b=$("cloudLoginBtn");b.disabled=true;b.textContent="Connecting...";cloudMessage("Supabase से कनेक्ट हो रहा है...");
+ try{const {data,error}=await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;cloudUser=data.user;if(!cloudUser)throw new Error("Login user नहीं मिला।");await cloudLoadRow();cloudGate(false);cloudStartPolling()}
+ catch(e){cloudMessage(e.message||"Login failed",true)}finally{b.disabled=false;b.textContent="Login & Sync Data"}
+}
+function cloudQueue(){if(!cloudReady||!cloudUser||!cloudClient)return;cloudDirty=true;clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudPush,900)}
+async function cloudPush(){
+ if(!cloudReady||!cloudUser||!cloudClient||!cloudDirty)return;
+ try{const snap=cloudSnapshot(),stamp=new Date().toISOString();const {error}=await cloudClient.from("accounting_data").upsert({user_id:cloudUser.id,data:snap,updated_at:stamp},{onConflict:"user_id"});if(error)throw error;cloudStamp=stamp;cloudDirty=false;cloudMessage("Cloud sync चालू है • अभी-अभी सेव हुआ।")}
+ catch(e){cloudMessage("Cloud sync error: "+(e.message||e),true)}
+}
+async function cloudPull(){
+ if(!cloudReady||!cloudUser||cloudDirty||document.querySelector("dialog[open]"))return;
+ try{const {data,error}=await cloudClient.from("accounting_data").select("data,updated_at").eq("user_id",cloudUser.id).maybeSingle();if(error||!data||!data.updated_at||data.updated_at===cloudStamp)return;
+  const localApi=DB.settings&&DB.settings.api;DB=cloudNormalize(data.data);if(localApi){DB.settings=DB.settings||{};DB.settings.api=localApi}cloudStamp=data.updated_at;cloudStoreLocal();render();cloudMessage("दूसरे device से आया नया data sync हो गया।")
+ }catch(e){/* keep local work available if network is temporarily unavailable */}
+}
+function cloudStartPolling(){if(cloudPolling)clearInterval(cloudPolling);cloudPolling=setInterval(cloudPull,8000)}
+async function cloudInit(){
+ try{if(!window.supabase||!window.supabase.createClient)throw new Error("Supabase library load नहीं हुई। Internet connection जाँचें और page refresh करें।");cloudClient=window.supabase.createClient(CLOUD_URL,CLOUD_KEY);const {data,error}=await cloudClient.auth.getSession();if(error)throw error;if(data.session){cloudUser=data.session.user;await cloudLoadRow();cloudGate(false);cloudStartPolling()}else cloudGate(true)}
+ catch(e){cloudGate(true);cloudMessage(e.message||"Supabase connection failed",true)}
+}
 /* ===== Users & company permissions (login is optional: it turns on when an Admin is created) ===== */
 DB.users=Array.isArray(DB.users)?DB.users:[];
 const AUTH={uid:""};try{AUTH.uid=sessionStorage.getItem("acc_sess")||""}catch(e){}
@@ -2144,6 +2200,7 @@ $("q").oninput=render;
 render();
 gstReminderCheck(false);
 bkInit();
+cloudInit();
 </script>
 </body>
 </html>
