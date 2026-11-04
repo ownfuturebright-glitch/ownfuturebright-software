@@ -157,6 +157,25 @@ dialog::backdrop{background:#0006}
 .jser{background:#eef1f7;color:#475069}
 @media(max-width:760px){.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:440px){.voucher-grid{grid-template-columns:1fr}}
+
+dialog.cmp{width:min(900px,95vw);padding:0;border-radius:14px;overflow:hidden}
+dialog.cmp #dt{margin:0;padding:22px 26px 0;font-size:20px;color:#1d2433}
+dialog.cmp .cx-x{position:absolute;right:18px;top:16px;background:none;border:0;color:#475069;font-size:20px;cursor:pointer;padding:4px 8px}
+dialog.cmp .csub{padding:2px 26px 12px;font-size:11px;color:#6b7690}
+dialog.cmp #frm{max-height:min(62vh,520px);overflow-y:auto;margin:0 26px;padding:14px 14px 4px;background:#f7f9fc;border-radius:8px}
+dialog.cmp .cgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px}
+dialog.cmp .cgrid .wide{grid-column:1/-1}
+dialog.cmp .cgrid label{font-size:11px;font-weight:700;color:#1d2433;margin:0 0 6px}
+dialog.cmp .cgrid input,dialog.cmp .cgrid select,dialog.cmp .cgrid textarea{width:100%;height:40px;border:1px solid #d5dbea;border-radius:10px;background:#fbfcff;padding:0 14px;font-size:15px;box-sizing:border-box}
+dialog.cmp .cgrid select{font-size:13px}
+dialog.cmp .cgrid textarea{height:auto;padding:10px 14px;font-family:inherit}
+dialog.cmp .cgrid input:focus,dialog.cmp .cgrid select:focus,dialog.cmp .cgrid textarea:focus{outline:0;border-color:#3151d3;box-shadow:0 0 0 2px #3151d322}
+dialog.cmp .csec{grid-column:1/-1;font-size:12px;font-weight:800;color:#3151d3;border-bottom:1px solid #dfe5f3;padding:6px 0 4px;margin-top:6px}
+dialog.cmp .btns{margin:0;padding:16px 26px 20px}
+dialog.cmp .btns button{height:38px;border-radius:9px;padding:0 18px;font-weight:700}
+dialog.cmp .btns .g{background:#fff;color:#111a33;border:1.5px solid #111a33}
+dialog.cmp #sv{background:#3151d3;color:#fff;border:0}
+@media(max-width:640px){dialog.cmp .cgrid{grid-template-columns:1fr}}
 label{display:block;font-size:13px;margin:10px 0 3px;color:#475069}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .tot{padding:10px;text-align:right;font-weight:600}
@@ -181,7 +200,7 @@ const tx=(t)=>({title:t,tx:1,f:[
  {k:"date",l:"Date",t:"date",r:1},{k:"inv",l:"Invoice / Bill No"},{k:"party",l:"Party",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},
  {k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"remark",l:"Remark"}]});
 const M={
- company:{title:"Company Master",f:[{k:"name",l:"Company Name",r:1},{k:"gstin",l:"GSTIN"},{k:"phone",l:"Phone"},{k:"city",l:"City"},{k:"address",l:"Address",t:"textarea"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"}]},
+ company:{title:"Company Master",f:[{k:"name",l:"Company Name",r:1},{k:"printname",l:"Print Name"},{k:"shortname",l:"Short Name"},{k:"country",l:"Country"},{k:"stcode",l:"State"},{k:"pin",l:"Pincode"},{k:"fy",l:"Financial Year"},{k:"fyfrom",l:"F.Y. Beginning From",t:"date"},{k:"books",l:"Books Commencing From",t:"date"},{k:"address",l:"Address",t:"textarea"},{k:"gstin",l:"GSTIN"},{k:"pan",l:"PAN"},{k:"phone",l:"Phone"},{k:"email",l:"Email"},{k:"acname",l:"Accountant Name"},{k:"acphone",l:"Accountant Phone"}]},
  party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"cash",l:"Cash Party (not shown in Outstanding)",opts:["No","Yes"]},{k:"phone",l:"Phone"},{k:"vehicle",l:"Vehicle Number"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
  item:{title:"Item Master",f:[{k:"name",l:"Item Name",r:1},{k:"code",l:"Item Code"},{k:"unit",l:"Unit",opts:UNITS},{k:"srate",l:"Sale Rate",t:"number"},{k:"prate",l:"Purchase Rate",t:"number"},{k:"openq",l:"Opening Stock Qty",t:"number"},{k:"minq",l:"Low Stock Limit (Qty, blank = 10)",t:"number"},{k:"roq",l:"Reorder Qty (Auto PO)",t:"number"},{k:"supp",l:"Default Supplier (Auto PO)",src:"party"},{k:"hsn",l:"HSN Code"},{k:"gst",l:"GST %",t:"number"}]},
  stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
@@ -1693,8 +1712,26 @@ function openForm(id){
  if(KC[cur]){openSale(id);return}
  if(VK[cur]){openVoucher(id);return}
  editId=id||null;
+ document.querySelectorAll("#dlg .cx-x,#dlg .csub").forEach(e=>e.remove());
  const m=M[cur],rec=id?DB[cur].find(x=>x.id===id):{};
  $("dt").textContent=(id?"Edit ":"New ")+m.title;
+
+ const _dl=$("dlg");_dl.classList.toggle("cmp",cur==="company");
+ if(cur==="company"){
+  $("dt").textContent=id?"Edit Company":"New Company";
+  const fyDef=(()=>{const d=new Date(),y=d.getMonth()>=3?d.getFullYear():d.getFullYear()-1;return y+"-"+String(y+1).slice(2)})();
+  const fyStart=fyDef.slice(0,4)+"-04-01";
+  const V=(k,d)=>esc(rec[k]??d??"");
+  const stSel=String(rec.stcode||"").padStart(2,"0");
+  const stOpts='<option value="">Select State</option>'+STATES.map(z=>`<option value="${z[0]}" ${z[0]===stSel?"selected":""}>${z[1]}</option>`).join("");
+  const I=(k,l,t,d,req)=>`<div><label>${l}${req?" *":""}</label><input id="f_${k}" type="${t||"text"}" value="${V(k,d)}"></div>`;
+  $("frm").innerHTML=`<div class="cgrid">${I("name","Company Name","text","",1)}${I("printname","Print Name")}${I("shortname","Short Name")}${I("country","Country","text","India")}<div><label>State</label><select id="f_stcode">${stOpts}</select></div>${I("pin","Pincode")}${I("fy","Financial Year","text",fyDef)}${I("fyfrom","F.Y. Beginning From","date",fyStart)}${I("books","Books Commencing From","date",fyStart)}<div></div><div class="wide"><label>Address</label><textarea id="f_address" rows="2">${V("address")}</textarea></div><div class="csec">Statutory Details</div>${I("gstin","GSTIN")}${I("pan","PAN")}<div class="csec">Contact Details</div>${I("phone","Phone")}${I("email","Email","email")}<div class="csec">Accountant Details</div>${I("acname","Accountant Name")}${I("acphone","Accountant Phone")}</div>`;
+  $("frm").insertAdjacentHTML("beforebegin",'<button type="button" class="cx-x" onclick="$(\'dlg\').close()">✕</button><div class="csub">Enter company information, statutory and accountant details.</div>');
+  $("sv").innerHTML="💾 Save Company";
+  _dl.style.width="";
+  _dl.showModal();return;
+ }
+ $("frm").style.cssText="";
  if(cur==="receipt"||cur==="payment"){
   const prefix=cur==="receipt"?"REC":"PAY";
   const nextNo=()=>prefix+"-"+String((DB[cur]||[]).reduce((mx,x)=>Math.max(mx,parseInt(String(x.number||"").replace(/^.*?-/,""),10)||0),0)+(id?0:1)).padStart(3,"0");
@@ -1998,6 +2035,7 @@ function saveForm(){
   if(t>(+rec.amount||0)+0.005){alert("Selected bills total (₹ "+n2(t)+") is more than the Amount");return}
   rec.alloc=al;
  }
+ if(cur==="company"){rec.city=stName(rec.stcode)||rec.city||"";if(!rec.printname)rec.printname=rec.name;if(!rec.shortname)rec.shortname=rec.name}
  if(cur==="journal"&&rec.dr===rec.cr){alert("Debit and Credit accounts must be different");return}
  if(m.tx)rec.amount=((+rec.qty||0)*(+rec.rate||0)).toFixed(2);
  if(editId){const i=DB[cur].findIndex(x=>x.id===editId);DB[cur][i]={...DB[cur][i],...rec}}
