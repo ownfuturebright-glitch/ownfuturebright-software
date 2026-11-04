@@ -265,9 +265,10 @@ const jSum=x=>{const L=jLines(x),nm=l=>lookup("party",l.acc);return L.filter(l=>
 const jSide=(x,f)=>{const L=jLines(x).filter(l=>l[f]>0),one=L.length===1;return L.map(l=>esc(lookup("party",l.acc))+(one?"":" ("+n2(l[f])+")")).join("<br>")};
 const jNext=()=>String((DB.journal||[]).reduce((mx,x)=>{const m=/^JV-(\d+)$/i.exec(String(x.number||"").trim());return m?Math.max(mx,+m[1]):mx},0)+1);
 const LED={sale:"dr",salereturn:"cr",purchase:"cr",purchasereturn:"dr",payment:"dr",receipt:"cr"};
+const vno=x=>String(x.number||x.inv||x.voucherNo||"");
 function entries(pid){const e=[];
- for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,remark:x.remark||"",dr:LED[k]==="dr"?(+x.amount||0)+((k==="payment"&&+x.tds)||0):0,cr:LED[k]==="cr"?(+x.amount||0)+((k==="receipt"&&+x.tds)||0):0}));
- DB.journal.forEach(x=>jLines(x).forEach(l=>{if(l.acc===pid&&(l.dr||l.cr))e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",remark:x.remark||"",dr:l.dr,cr:l.cr})}));
+ for(const k in LED)DB[k].filter(x=>x.party===pid).forEach(x=>e.push({k,id:x.id,date:x.date,type:M[k].title,no:vno(x),remark:x.remark||"",dr:LED[k]==="dr"?(+x.amount||0)+((k==="payment"&&+x.tds)||0):0,cr:LED[k]==="cr"?(+x.amount||0)+((k==="receipt"&&+x.tds)||0):0}));
+ DB.journal.forEach(x=>jLines(x).forEach(l=>{if(l.acc===pid&&(l.dr||l.cr))e.push({k:"journal",id:x.id,date:x.date,type:"Journal Voucher",no:vno(x),remark:x.remark||"",dr:l.dr,cr:l.cr})}));
  return e.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0)}
 const bal=p=>(+p.opening||0)+entries(p.id).reduce((a,x)=>a+x.dr-x.cr,0);
 /* Cash / Bank / Sale / Purchase accounts (and any party marked Cash Party = Yes) are ledger accounts, not real parties, so they are left out of Outstanding / Receivable / Payable */
@@ -329,12 +330,12 @@ function bookPeriodControls(){return reportPeriodControls()}
 const inBookPeriod=x=>{const r=reportPeriodRange();return !!x.date&&x.date>=r.from&&x.date<=r.to};
 function book(title,pick){
  const l=[];
- DB.receipt.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"receipt",id:x.id,d:x.date,t:"Receipt",p:x.party,i:+x.amount||0,o:0}));
- DB.payment.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"payment",id:x.id,d:x.date,t:"Payment",p:x.party,i:0,o:+x.amount||0}));
+ DB.receipt.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"receipt",id:x.id,d:x.date,t:"Receipt",no:vno(x),p:x.party,i:+x.amount||0,o:0}));
+ DB.payment.filter(x=>pick(x)&&inBookPeriod(x)).forEach(x=>l.push({k:"payment",id:x.id,d:x.date,t:"Payment",no:vno(x),p:x.party,i:0,o:+x.amount||0}));
  l.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
  let b=0,ti=0,to=0;
- const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b),act(x.k,x.id)]});
- return tbl(["Date","Type","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
+ const rows=l.map(x=>{b+=x.i-x.o;ti+=x.i;to+=x.o;return [x.d,x.t,esc(x.no),esc(lookup("party",x.p)),n2(x.i),n2(x.o),dc(b),act(x.k,x.id)]});
+ return tbl(["Date","Type","Voucher No.","Party","Receipt (In)","Payment (Out)","Balance","Action"],rows,`In: ₹ ${n2(ti)} &nbsp; Out: ₹ ${n2(to)} &nbsp; ${title} Balance: ₹ ${dc(ti-to)}`);
 }
 function outst(recv){
  const l=DB.party.map(p=>[p,(partySide(p)||{}).amt,(partySide(p)||{}).side]).filter(([p,b,sd])=>sd===(recv?"recv":"pay"));
@@ -371,10 +372,10 @@ const R={
   <div class="pan"><b>Quick Actions</b><small>Transactions, masters and reports</small><div class="qa">${Q.map(k=>`<div class="qt" onclick="go('${k}')"><span>${ICON[k]}</span>${T(k)}<b>+</b></div>`).join("")}</div></div></div>`}},
  daybook:{t:"Day Book",f(){
   const r=[];
-  ["sale","purchase","salereturn","purchasereturn"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(lineSum(x)),n2(x.amount),act(k,x.id)])));
-  ["receipt","payment"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),act(k,x.id)])));
-  DB.journal.filter(x=>x.date===RS.date).forEach(x=>r.push(["Journal Voucher",esc(jSum(x)),esc(x.remark||""),n2(x.amount),act("journal",x.id)]));
-  return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Party","Details","Amount","Action"],r,r.length+" entries")}},
+  ["sale","purchase","salereturn","purchasereturn"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(docNo(k,x)),esc(lookup("party",x.party)),esc(lineSum(x)),n2(x.amount),act(k,x.id)])));
+  ["receipt","payment"].forEach(k=>DB[k].filter(x=>x.date===RS.date).forEach(x=>r.push([M[k].title,esc(vno(x)),esc(lookup("party",x.party)),esc(x.mode||"Cash"),n2(x.amount),act(k,x.id)])));
+  DB.journal.filter(x=>x.date===RS.date).forEach(x=>r.push(["Journal Voucher",esc(vno(x)),esc(jSum(x)),esc(x.remark||""),n2(x.amount),act("journal",x.id)]));
+  return `<div class="ctl">${dateCtl("date","Date")}</div>`+tbl(["Voucher","Voucher No.","Party","Details","Amount","Action"],r,r.length+" entries")}},
  cashbook:{t:"Cash Book",f:()=>book("Cash",x=>!isBank(x))},
  bankbook:{t:"Bank Book",f:()=>book("Bank",isBank)},
  journalbook:{t:"Journal Book",f:()=>tbl(["Date","Voucher No.","Debit A/c","Credit A/c","Amount","Narration","Action"],DB.journal.filter(inBookPeriod).slice().sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,esc(x.number||""),jSide(x,"dr"),jSide(x,"cr"),n2(x.amount),esc(x.remark||""),act("journal",x.id)]))},
@@ -392,10 +393,10 @@ const R={
   const p=DB.party.find(x=>x.id===RS.party);if(!p)return ctl+'<div class="empty">Select a party</div>';
   let b=+p.opening||0;const e=entries(p.id),rows=[];
   e.filter(x=>RS.from&&x.date<RS.from).forEach(x=>b+=x.dr-x.cr);
-  rows.push(["","<i>Opening Balance</i>","","","",dc(b),""]);
+  rows.push(["","<i>Opening Balance</i>","","","","",dc(b),""]);
   let td=0,tc=0;
-  e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.remark),n2(x.dr),n2(x.cr),dc(b),act(x.k,x.id)])});
-  return ctl+tbl(["Date","Voucher","Remark","Debit","Credit","Balance","Action"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
+  e.filter(x=>(!RS.from||x.date>=RS.from)&&(!RS.to||x.date<=RS.to)).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;rows.push([x.date,x.type,esc(x.no),esc(x.remark),n2(x.dr),n2(x.cr),dc(b),act(x.k,x.id)])});
+  return ctl+tbl(["Date","Voucher","Voucher No.","Remark","Debit","Credit","Balance","Action"],rows,`Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; Closing: ₹ ${dc(b)}`)}},
  itemledger:{t:"Item Ledger",f(){
   const ctl=`<div class="ctl"><div><label>Item</label><select onchange="RS.item=this.value;render()"><option value="">-- Select --</option>${DB.item.map(i=>`<option value="${i.id}" ${i.id===RS.item?"selected":""}>${esc(i.name)}</option>`).join("")}</select></div></div>`;
   const it=DB.item.find(x=>x.id===RS.item);if(!it)return ctl+'<div class="empty">Select an item (or click an item name in Stock Status / Item Master)</div>';
