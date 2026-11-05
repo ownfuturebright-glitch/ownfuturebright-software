@@ -449,23 +449,7 @@ function exportReportPDF(){
  const t=reportTable();if(!t){alert('Export karne ke liye report table nahi mili.');return}
  const title=R[cur]?.t||'Report';const w=window.open('','_blank');if(!w){alert('PDF ke liye popup allow karein.');return}
  const clone=t.cloneNode(true);clone.querySelectorAll('tr').forEach(tr=>{const cells=[...tr.children];if(cells.length&&/Action/i.test(cells[cells.length-1].innerText))cells[cells.length-1].remove()});
- w.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#e8ecf7} .tot{margin-top:10px;text-align:right;font-weight:bold}@media print{button{display:none}}</style></head><body><h2>'+title+'</h2>'+clone.outerHTML+'<script>window.onload=()=>{window.print()}<\/script>
-<script>
-(function(){
- const nav=document.getElementById('nav');
- const btn=document.getElementById('mobileMenuBtn');
- const shade=document.getElementById('mobileNavShade');
- if(!nav||!btn||!shade)return;
- function closeMenu(){nav.classList.remove('mobile-open');shade.classList.remove('show');btn.setAttribute('aria-expanded','false')}
- function openMenu(){nav.classList.add('mobile-open');shade.classList.add('show');btn.setAttribute('aria-expanded','true')}
- btn.addEventListener('click',()=>nav.classList.contains('mobile-open')?closeMenu():openMenu());
- shade.addEventListener('click',closeMenu);
- nav.addEventListener('click',e=>{if(e.target.closest('a'))closeMenu()});
- document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
- window.addEventListener('resize',()=>{if(window.innerWidth>820)closeMenu()});
-})();
-</script>
-</body></html>');w.document.close();
+ w.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#e8ecf7}.tot{margin-top:10px;text-align:right;font-weight:bold}@media print{button{display:none}}</style></head><body><h2>'+title+'</h2>'+clone.outerHTML+'<script>window.onload=()=>{window.print()}<\\/script></body></html>');w.document.close();
 }
 const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
 const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="setDt('${k}',this.value)"></div>`;
@@ -1583,21 +1567,6 @@ table.t{border-collapse:collapse;width:100%}table.t td,table.t th{padding:5px 8p
 function prOpen(title,body){
  const w=window.open("","_blank");if(!w){alert("Please allow pop-ups to print");return}
  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${PRCSS}</style></head><body>${body}
-<script>
-(function(){
- const nav=document.getElementById('nav');
- const btn=document.getElementById('mobileMenuBtn');
- const shade=document.getElementById('mobileNavShade');
- if(!nav||!btn||!shade)return;
- function closeMenu(){nav.classList.remove('mobile-open');shade.classList.remove('show');btn.setAttribute('aria-expanded','false')}
- function openMenu(){nav.classList.add('mobile-open');shade.classList.add('show');btn.setAttribute('aria-expanded','true')}
- btn.addEventListener('click',()=>nav.classList.contains('mobile-open')?closeMenu():openMenu());
- shade.addEventListener('click',closeMenu);
- nav.addEventListener('click',e=>{if(e.target.closest('a'))closeMenu()});
- document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
- window.addEventListener('resize',()=>{if(window.innerWidth>820)closeMenu()});
-})();
-</script>
 </body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),500);
 }
@@ -1727,21 +1696,6 @@ function salePrint(rec,k){
  const rd=+rec.round||0,gt=rec.taxable!==undefined?+rec.amount:g.tot;
  const w=window.open("","_blank");if(!w){alert("Please allow pop-ups to print");return}
  w.document.write(`<html><head><title>${K.doc} ${esc(rec.inv||"")}</title><style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}table{border-collapse:collapse;width:100%;margin-top:14px}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}th{background:#f0f0f0}.r{text-align:right}h2{margin:0}</style></head><body><div style="display:flex;justify-content:space-between"><div><h2>${esc(c.name||"")}</h2><div>${esc(c.address||"")}</div><div>GSTIN: ${esc(c.gstin||"-")}</div></div><div style="text-align:right"><h2>${K.doc}</h2><div>${K.no.replace(".","")}: <b>${esc(rec.inv||"-")}</b></div><div>Date: ${esc(fd(rec.date))}</div></div></div><hr><div><b>${K.bill}:</b> ${esc(pt.name||"-")}<br>GSTIN: ${esc(rec.gstin!==undefined?rec.gstin:(pt.gstin||"-"))||"-"}<br>${K.pos}: ${esc(stName(g.pos)||"-")}</div><table><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc %</th><th>Taxable</th><th>GST</th><th>Total</th></tr>${rows}</table><table style="width:300px;margin-left:auto">${+rec.invDisc>0&&rec.discMode==="pre"?`<tr><td>Invoice Discount (before GST)</td><td class="r">-${n2(rec.invDisc)}</td></tr>`:""}<tr><td>Taxable Value</td><td class="r">${n2(g.tv)}</td></tr>${g.intra?`<tr><td>CGST</td><td class="r">${n2(g.cg)}</td></tr><tr><td>SGST</td><td class="r">${n2(g.sg)}</td></tr>`:`<tr><td>IGST</td><td class="r">${n2(g.ig)}</td></tr>`}${+rec.postDisc>0?`<tr><td>Less: Invoice Discount</td><td class="r">-${n2(rec.postDisc)}</td></tr>`:""}<tr><td>Round Off</td><td class="r">${n2(rd)}</td></tr><tr><td><b>Grand Total</b></td><td class="r"><b>₹${n2(gt)}</b></td></tr></table>${rec.remark?`<p><b>Narration:</b> ${esc(rec.remark)}</p>`:""}
-<script>
-(function(){
- const nav=document.getElementById('nav');
- const btn=document.getElementById('mobileMenuBtn');
- const shade=document.getElementById('mobileNavShade');
- if(!nav||!btn||!shade)return;
- function closeMenu(){nav.classList.remove('mobile-open');shade.classList.remove('show');btn.setAttribute('aria-expanded','false')}
- function openMenu(){nav.classList.add('mobile-open');shade.classList.add('show');btn.setAttribute('aria-expanded','true')}
- btn.addEventListener('click',()=>nav.classList.contains('mobile-open')?closeMenu():openMenu());
- shade.addEventListener('click',closeMenu);
- nav.addEventListener('click',e=>{if(e.target.closest('a'))closeMenu()});
- document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
- window.addEventListener('resize',()=>{if(window.innerWidth>820)closeMenu()});
-})();
-</script>
 </body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
