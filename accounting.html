@@ -1383,7 +1383,7 @@ function apiField(group,key,label,secret=false){
  let obj={};try{obj=JSON.parse(apiCfg()[group]||"{}")||{}}catch(e){}
  const aliases={CDKey:["CDKey","Cdkey","cdkey"],EFUserName:["EFUserName","EFUsername"],EFPassword:["EFPassword"],EInvUserName:["EInvUserName","EinvUserName"],EInvPassword:["EInvPassword","EinvPassword"],EWBUserName:["EWBUserName","EwbUserName"],EWBPassword:["EWBPassword","EwbPassword"]};
  const keys=aliases[key]||[key];let value="";for(const k of keys){if(obj[k]!==undefined&&obj[k]!==null&&String(obj[k]).trim()){value=obj[k];break}}
- const inputType=secret?"password":"text";
+ const inputType="text";
  return `<div><label>${label}</label><input type="${inputType}" autocomplete="off" value="${esc(value)}" onchange="apiSetField('${group}','${key}',this.value)" placeholder="Enter ${label}"></div>`;
 }
 function apiSetMode(v){apiCfg().mode=v;save();render()}
@@ -1416,7 +1416,7 @@ R.apiset={t:"Webtel API Settings",f(){
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">${sandbox}${live}</div>
  <div style="margin-top:14px"><label>How to send the credentials</label><select style="max-width:300px" onchange="apiSetMode(this.value)"><option value="body" ${S.mode!=="headers"?"selected":""}>In the request body (top level)</option><option value="headers" ${S.mode==="headers"?"selected":""}>In the HTTP headers</option></select></div>
  <label>Test Buyer GSTIN for Sandbox (optional)</label><input style="max-width:300px" value="${esc(S.sbuyer||"")}" placeholder="A Sandbox registered buyer GSTIN" onchange="apiSetBuyer(this.value)">
- <div style="font-size:12px;color:#b26a00;margin-top:14px;line-height:1.7">Credentials are saved in this browser's accounting data under the selected company. Password fields are masked on screen. Keep the browser/device secure; credentials are stored locally and are not encrypted by this page.</div></div>`
+ <div style="font-size:12px;color:#b26a00;margin-top:14px;line-height:1.7">Credentials are saved in this browser's accounting data under the selected company. Passwords are shown on screen. Keep the browser/device secure; credentials are stored locally and are not encrypted by this page.</div></div>`
 }};
 function urlSet(ke,key,v){
  v=v.trim();const u=DB.settings.url=DB.settings.url||{},z=ACTS[ke].find(x=>x[0]===key);
