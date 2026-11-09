@@ -777,12 +777,13 @@ R.payremind={t:"Payment Reminder",f(){
 
 RS.ew={dist:"0",veh:"",tname:"",tid:"",einvEwb:false,transMode:"1",transDocNo:"",transDocDt:"",vehType:"R"};
 const PORT={einv:{live:"https://einvoice1.gst.gov.in/",sand:"https://einv-apisandbox.nic.in/"},ewb:{live:"https://ewaybillgst.gov.in/",sand:"https://docs.ewaybillgst.gov.in/"}};
+const adr=(a,b)=>{let x=String(a||"").replace(/\s+/g," ").trim(),y=String(b||"").replace(/\s+/g," ").trim();if(!x){x=y;y=""}if(x.length>100){const k=x.lastIndexOf(" ",100),n=k>40?k:100;y=(x.slice(n).trim()+" "+y).trim();x=x.slice(0,n).trim()}y=y.slice(0,100);return {a1:x,a2:y.length>=3?y:undefined}};
 function edocBuild(kind){
  const x=DB.sale.find(s=>s.id===RS.es)||DB.sale[0];if(!x)return null;
  const g=gstCalc(x),sg=RS.sbx?sbxFor(g.c):"",sb=RS.sbx?(apiCfg().sbuyer||""):"";
  const c=sg?{...g.c,gstin:sg}:g.c,pt=sb?{...g.pt,gstin:sb,stcode:sb.slice(0,2)}:g.pt,no=docNo("sale",x),iss=[],need=(v,m)=>{if(!v)iss.push(m)};
  const pos=sb?sb.slice(0,2):(g.pos||stc(pt)),intra=!!pos&&pos===stc(c),sp=v=>({cg:intra?v/2:0,sg:intra?v/2:0,ig:intra?0:v});
- need(c.gstin,"Company GSTIN (Company Master)");need(c.pin,"Company Pin Code");need(stc(c),"Company State Code");
+ const SA=adr(c.address,c.address2),BA=adr(pt.addr,pt.addr2);need(SA.a1,"Company Address 1 (Company Master)");need(BA.a1,"Party Address 1 (Party Master)");need(c.gstin,"Company GSTIN (Company Master)");need(c.pin,"Company Pin Code");need(stc(c),"Company State Code");
  if(kind==="einv")need(pt.gstin,"Party GSTIN (required for e-invoice B2B)");
  need(pt.pin,"Party Pin Code");need(stc(pt),"Party State Code");
  const pin=v=>+String(v||"").replace(/\D/g,"")||0;
@@ -792,8 +793,8 @@ function edocBuild(kind){
  const T=sp(g.tax),rnd=+x.round||0,pd=+x.postDisc||0,inv=r2(g.tv+g.tax-pd+rnd),dsc=pd;
  let j;
  if(kind==="einv"){j={Version:"1.1",TranDtls:{TaxSch:"GST",SupTyp:"B2B",RegRev:"N",IgstOnIntra:"N"},DocDtls:{Typ:"INV",No:no,Dt:fd(x.date)},
-  SellerDtls:{Gstin:c.gstin||"",LglNm:c.name||"",Addr1:c.address||"",Addr2:c.address2||"",Loc:c.city||"",Pin:pin(c.pin),Stcd:stc(c)},
-  BuyerDtls:{Gstin:pt.gstin||"",LglNm:pt.name||"",Pos:pos,Addr1:pt.addr||"",Addr2:pt.addr2||"",Loc:pt.city||"",Pin:pin(pt.pin),Stcd:stc(pt)},
+  SellerDtls:{Gstin:c.gstin||"",LglNm:c.name||"",Addr1:SA.a1,Addr2:SA.a2,Loc:c.city||stName(stc(c)),Pin:pin(c.pin),Stcd:stc(c)},
+  BuyerDtls:{Gstin:pt.gstin||"",LglNm:pt.name||"",Pos:pos,Addr1:BA.a1,Addr2:BA.a2,Loc:pt.city||stName(stc(pt)),Pin:pin(pt.pin),Stcd:stc(pt)},
   ItemList:IL.map((o,i)=>({SlNo:String(i+1),PrdDesc:o.it.name||"",IsServc:"N",HsnCd:o.hsn,Qty:o.q,Unit:o.u,UnitPrice:o.rate,TotAmt:r2(o.q*o.rate),Discount:r2(Math.max(0,o.q*o.rate-o.l.t)),AssAmt:r2(o.l.t),GstRt:o.l.r,IgstAmt:r2(o.s.ig),CgstAmt:r2(o.s.cg),SgstAmt:r2(o.s.sg),TotItemVal:r2(o.l.t+o.l.tx)})),
   ValDtls:{AssVal:r2(g.tv),CgstVal:r2(T.cg),SgstVal:r2(T.sg),IgstVal:r2(T.ig),Discount:r2(dsc),RndOffAmt:r2(rnd),TotInvVal:inv}};
   if(RS.ew.einvEwb){
@@ -804,8 +805,8 @@ function edocBuild(kind){
   }
  }
  else{const E=RS.ew;j={supplyType:"O",subSupplyType:"1",docType:"INV",docNo:no,docDate:fd(x.date),
-  fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:c.address||"",fromAddr2:c.address2||"",fromPlace:c.city||"",fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
-  toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:pt.addr||"",toAddr2:pt.addr2||"",toPlace:pt.city||"",toPincode:pin(pt.pin),toStateCode:+pos||0,actToStateCode:+pos||0,
+  fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:SA.a1,fromAddr2:SA.a2,fromPlace:c.city||stName(stc(c)),fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
+  toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:BA.a1,toAddr2:BA.a2,toPlace:pt.city||stName(stc(pt)),toPincode:pin(pt.pin),toStateCode:+pos||0,actToStateCode:+pos||0,
   totalValue:r2(g.tv),cgstValue:r2(T.cg),sgstValue:r2(T.sg),igstValue:r2(T.ig),cessValue:0,totInvValue:inv,
   transMode:"1",transDistance:String(E.dist||"0"),transporterName:E.tname,transporterId:E.tid,vehicleNo:E.veh,vehicleType:"R",
   itemList:IL.map(o=>({productName:o.it.name||"",productDesc:o.it.name||"",hsnCode:+o.hsn||0,quantity:o.q,qtyUnit:o.u,taxableAmount:r2(o.l.t),cgstRate:intra?o.l.r/2:0,sgstRate:intra?o.l.r/2:0,igstRate:intra?0:o.l.r,cessRate:0}))};
@@ -1981,7 +1982,7 @@ function openForm(id){
   const V=k=>esc(rec[k]??"");
   const I=(k,l,t,req,ph)=>`<div><label>${l}${req?" *":""}</label><input id="f_${k}" type="${t||"text"}" ${t==="number"?'step="any"':""} ${ph?`placeholder="${ph}"`:""} value="${V(k)}"></div>`;
   const S=(k,l,opts)=>`<div><label>${l}</label><select id="f_${k}">${opts.map(o=>`<option ${o===(rec[k]||opts[0])?"selected":""}>${o}</option>`).join("")}</select></div>`;
-  $("frm").innerHTML=`<div class="cgrid"><div class="csec">Basic Details</div>${I("name","Party Name","text",1)}${S("type","Type",["Customer","Supplier","Both"])}${S("cash","Cash Party (not shown in Outstanding)",["No","Yes"])}<div class="csec">Contact Details</div>${I("phone","Phone")}${I("vehicle","Vehicle Number")}${I("city","City")}<div class="csec">GST &amp; Address</div>${I("gstin","GSTIN")}${I("stcode","State Code (e.g. 07)")}${I("pin","Pin Code")}<div class="wide">${I("addr","Address")}</div><div class="csec">Account</div>${I("opening","Opening Balance (Dr +ve / Cr -ve)","number")}</div>`;
+  $("frm").innerHTML=`<div class="cgrid"><div class="csec">Basic Details</div>${I("name","Party Name","text",1)}${S("type","Type",["Customer","Supplier","Both"])}${S("cash","Cash Party (not shown in Outstanding)",["No","Yes"])}<div class="csec">Contact Details</div>${I("phone","Phone")}${I("vehicle","Vehicle Number")}${I("city","City")}<div class="csec">GST &amp; Address</div>${I("gstin","GSTIN")}${I("stcode","State Code (e.g. 07)")}${I("pin","Pin Code")}<div class="wide" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 24px">${I("addr","Address 1")}${I("addr2","Address 2")}</div><div class="csec">Account</div>${I("opening","Opening Balance (Dr +ve / Cr -ve)","number")}</div>`;
   $("frm").insertAdjacentHTML("beforebegin",'<button type="button" class="cx-x" onclick="$(\'dlg\').close()">✕</button><div class="csub">Enter party contact, GST and opening balance details.</div>');
   $("sv").textContent="💾 Save Party";
  }else{
