@@ -1374,6 +1374,18 @@ function credEff(kind,live){
 const credKey=(kind,live)=>(live?"live":"sand")+(kind==="ewb"?"w":"");
 const credInfo=(kind,e)=>{const C=apiCfg();const cr=credEff(kind,e==="l");const n=cr?Object.keys(cr).length:0;return n+" key(s) set, sent in the "+(C.mode==="headers"?"HTTP headers":"request body")};
 function apiSetJ(k,v){try{JSON.parse(v||"{}")}catch(x){alert('Enter valid JSON, for example {"CDKey":"..."}');return}apiCfg()[k]=v.trim()||"{}";save();render()}
+
+function apiSetField(group,key,value){
+ const S=apiCfg();let obj={};try{obj=JSON.parse(S[group]||"{}")||{}}catch(e){obj={}}
+ obj[key]=value;S[group]=JSON.stringify(obj);save();
+}
+function apiField(group,key,label,secret=false){
+ let obj={};try{obj=JSON.parse(apiCfg()[group]||"{}")||{}}catch(e){}
+ const aliases={CDKey:["CDKey","Cdkey","cdkey"],EFUserName:["EFUserName","EFUsername"],EFPassword:["EFPassword"],EInvUserName:["EInvUserName","EinvUserName"],EInvPassword:["EInvPassword","EinvPassword"],EWBUserName:["EWBUserName","EwbUserName"],EWBPassword:["EWBPassword","EwbPassword"]};
+ const keys=aliases[key]||[key];let value="";for(const k of keys){if(obj[k]!==undefined&&obj[k]!==null&&String(obj[k]).trim()){value=obj[k];break}}
+ const inputType=secret?"password":"text";
+ return `<div><label>${label}</label><input type="${inputType}" autocomplete="off" value="${esc(value)}" onchange="apiSetField('${group}','${key}',this.value)" placeholder="Enter ${label}"></div>`;
+}
 function apiSetMode(v){apiCfg().mode=v;save();render()}
 const SBX_G="29AAACW3775F000 01AAACW3775F008 02AAACW3775F009 03AAACW3775F010 04AAACW3775F011 05AAACW3775F012 06AAACW3775F013 07AAACW3775F006 08AAACW3775F014 09AAACW3775F015 10AAACW3775F016 11AAACW3775F017 12AAACW3775F018 13AAACW3775F019 14AAACW3775F020 15AAACW3775F021 16AAACW3775F022 17AAACW3775F023 18AAACW3775F024 19AAACW3775F025 20AAACW3775F026 21AAACW3775F027 22AAACW3775F028 23AAACW3775F029 24AAACW3775F030 25AAACW3775F031 26AAACW3775F032 27AAACW3775F007 30AAACW3775F033 31AAACW3775F034 32AAACW3775F035 33AAACW3775F036 34AAACW3775F037 35AAACW3775F038 36AAACW3775F039 37AAACW3775F040".split(" ");
 const sbxPw=g=>g.startsWith("29")?"Admin!23..":"Admin!23";
@@ -1389,19 +1401,23 @@ R.apiset={t:"Webtel API Settings",f(){
  const c=comp(),S=apiCfg();
  if(!c.id)return '<div class="empty">Create a company in Company Master first</div>';
  const g=sbxFor(c);
- const ta=(k,l,ph)=>`<div><label>${l}</label><textarea rows="9" style="font-family:monospace;font-size:12px" placeholder='${ph}' onchange="apiSetJ('${k}',this.value)">${esc((S[k]||"{}")==="{}"?"":S[k])}</textarea></div>`;
- return `<div style="padding:16px 18px;max-width:980px"><div style="font-size:14px">Company: <b>${esc(c.name||"-")}</b> &nbsp; GSTIN: <b>${esc(c.gstin||"-")}</b> &nbsp; State Code: <b>${esc(stc(c)||"-")}</b></div>
- <div style="font-size:12px;color:#6b7690;margin:4px 0 10px">Settings are saved separately for each company (change the Current Company at the top).</div>
- <div style="margin:12px 0;padding:12px 14px;background:#eef3ff;border-radius:8px;font-size:13px;line-height:1.7"><b>Dummy credentials for Sandbox</b> (from the test GSTIN list provided by Webtel)<br>${g?`Dummy GSTIN for this company's State Code: <b>${g}</b>. In Sandbox, this GSTIN is used automatically as the seller GSTIN in the E-Invoice / E-Way Bill JSON.`:"Enter the State Code (for example 07 for Delhi) in Company Master to get the dummy GSTIN."}<br><button style="margin-top:8px" onclick="apiFillSbx()" ${g?"":"disabled"}>Fill Sandbox credentials</button></div>
- <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px">
- ${ta("sand","E-Invoice Sandbox credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"...","GSTIN":"...","Bill_From_GSTIN":"..."}')}
- ${ta("sandw","E-Way Bill Sandbox credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EWBUserName":"...","EWBPassword":"...","GSTIN":"...","Bill_From_GSTIN":"..."}')}
- ${ta("live","E-Invoice Live credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"..."}')}
- ${ta("livew","E-Way Bill Live credentials (JSON)",'{"Cdkey":"...","EFUserName":"...","EFPassword":"...","EInvUserName":"...","EInvPassword":"...","EWBUserName":"...","EWBPassword":"..."}')}
- </div>
- <label>How to send the credentials</label><select style="max-width:300px" onchange="apiSetMode(this.value)"><option value="body" ${S.mode!=="headers"?"selected":""}>In the request body (top level)</option><option value="headers" ${S.mode==="headers"?"selected":""}>In the HTTP headers</option></select>
- <label>Test Buyer GSTIN for Sandbox (optional)</label><input style="max-width:300px" value="${esc(S.sbuyer||"")}" placeholder="A real party GSTIN is invalid in Sandbox" onchange="apiSetBuyer(this.value)">
- <div style="font-size:12px;color:#b26a00;margin-top:14px;line-height:1.7">These values are saved in your browser as plain text, so use them only on your own computer. They are not included in the backup file. In Sandbox the buyer GSTIN must also be registered in Sandbox, otherwise you get a "GSTIN is invalid" error. Entering it here replaces the buyer GSTIN only in the Sandbox JSON.</div></div>`}};
+ const card=(title,tag,html)=>`<div class="card" style="margin:0;padding:16px;border:1px solid #dce3ef;border-radius:12px;background:#fff"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b>${title}</b><span style="font-size:11px;padding:5px 10px;border-radius:20px;background:#eef3ff;color:#3454a4">${tag}</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 12px">${html}</div></div>`;
+ const sandbox=card("Sandbox Credentials","TEST",
+  apiField("sand","GSTIN","Sandbox GSTIN")+
+  apiField("sand","CDKey","CD Key")+apiField("sand","EFUserName","EF User")+apiField("sand","EFPassword","EF Password",true)+apiField("sand","EInvUserName","E-Invoice User")+apiField("sand","EInvPassword","E-Invoice Password",true)+
+  apiField("sandw","CDKey","E-Way CD Key")+apiField("sandw","EFUserName","E-Way EF User")+apiField("sandw","EFPassword","E-Way EF Password",true));
+ const live=card("Live Credentials","LIVE",
+  apiField("live","GSTIN","Seller GSTIN")+
+  apiField("live","CDKey","E-Invoice CD Key")+apiField("live","EFUserName","EF User")+apiField("live","EFPassword","EF Password",true)+apiField("live","EInvUserName","E-Invoice User")+apiField("live","EInvPassword","E-Invoice Password",true)+
+  apiField("livew","CDKey","E-Way CD Key")+apiField("livew","EFUserName","E-Way EF User")+apiField("livew","EFPassword","E-Way EF Password",true)+apiField("livew","EWBUserName","E-Way User")+apiField("livew","EWBPassword","E-Way Password",true));
+ return `<div style="padding:16px 18px;max-width:1100px"><div style="font-size:14px;margin-bottom:5px">Current Company: <b>${esc(c.name||"-")}</b> &nbsp; GSTIN: <b>${esc(c.gstin||"-")}</b> &nbsp; State Code: <b>${esc(stc(c)||"-")}</b></div>
+ <div style="font-size:12px;color:#52617a;margin:4px 0 14px">Each company's Webtel credentials are saved separately using its Company ID. Change the Current Company at the top to enter or view that company's credentials. Saving credentials for one company will not replace another company's settings.</div>
+ <div style="margin:0 0 14px;padding:12px 14px;background:#eef3ff;border-radius:8px;font-size:13px;line-height:1.7"><b>Sandbox helper</b><br>${g?`Suggested Sandbox GSTIN for this company's State Code: <b>${g}</b>.`:`Enter the State Code (for example 07 for Delhi) in Company Master to identify the Sandbox GSTIN.`}<br><button style="margin-top:8px" onclick="apiFillSbx()" ${g?"":"disabled"}>Fill Sandbox credentials</button></div>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">${sandbox}${live}</div>
+ <div style="margin-top:14px"><label>How to send the credentials</label><select style="max-width:300px" onchange="apiSetMode(this.value)"><option value="body" ${S.mode!=="headers"?"selected":""}>In the request body (top level)</option><option value="headers" ${S.mode==="headers"?"selected":""}>In the HTTP headers</option></select></div>
+ <label>Test Buyer GSTIN for Sandbox (optional)</label><input style="max-width:300px" value="${esc(S.sbuyer||"")}" placeholder="A Sandbox registered buyer GSTIN" onchange="apiSetBuyer(this.value)">
+ <div style="font-size:12px;color:#b26a00;margin-top:14px;line-height:1.7">Credentials are saved in this browser's accounting data under the selected company. Password fields are masked on screen. Keep the browser/device secure; credentials are stored locally and are not encrypted by this page.</div></div>`
+}};
 function urlSet(ke,key,v){
  v=v.trim();const u=DB.settings.url=DB.settings.url||{},z=ACTS[ke].find(x=>x[0]===key);
  if(!v||v===z[2])delete u[ke+"."+key];else u[ke+"."+key]=v;
