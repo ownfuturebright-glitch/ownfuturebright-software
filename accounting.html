@@ -870,7 +870,7 @@ function fany(o,k){if(o&&typeof o==="object"){if(k in o&&o[k]!==null&&typeof o[k
 function findKey(o,k){if(o&&typeof o==="object"){if(k in o&&typeof o[k]==="string")return o[k];for(const v of Object.values(o)){const r=findKey(v,k);if(r)return r}}return ""}
 function apiBodyFor(kind,live){
  const C0=apiCfg(),cr0=credEff(kind,live),T0=apiTpl(kind,RS.api.act);
- return JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...cr0,...T0},null,2);
+ return JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...T0,...cr0},null,2);
 }
 function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
@@ -894,7 +894,7 @@ async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
  const C=apiCfg(),cr=credEff(kind,live);if(cr===null){alert("The credentials in Webtel API Settings are not valid JSON");return}
- h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body={...cr,...body};
+ h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body={...body,...cr};
  if(live&&!confirm("LIVE API: "+act[1]+"\nThis "+(kind==="einv"?"e-invoice":"e-way bill")+" will create or change a real document. Are you sure you want to send it?"))return;
  a.resp="Sending...";render();
  try{
@@ -1351,11 +1351,25 @@ R.invset={t:"Invoice Number Settings",f(){
  const dirty=Object.keys(RS.invd).length>0;
  return `<div class="ig">${INVT.map(card).join("")}</div><div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px"><span id="inv_msg" style="font-size:13px;${RS.invMsg==="saved"?"color:#14803c":"color:#e08a00"}">${RS.invMsg==="saved"?"✔ Saved":dirty?"● Unsaved changes":""}</span><button class="isave" onclick="invSave()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Save Invoice Number Settings</button></div><div style="font-size:12px;color:#6b7690;margin-top:12px;line-height:1.7">When a prefix or suffix is set, a new entry opens with the next invoice number already filled in (you can still edit it). The next number is the highest existing number with the same prefix and suffix, plus 1. To start from a specific number, enter the first invoice manually, for example TE/74/26-27.</div>`}};
 const apiCfg=()=>{const id=comp().id||"_",S=DB.settings.api=DB.settings.api||{};return S[id]||(S[id]={sand:"{}",sandw:"{}",live:"{}",livew:"{}",mode:"body"})};
+function normalizeApiCreds(src){
+ const o={...(src||{})},pick=(names)=>{for(const k of names){if(o[k]!==undefined&&o[k]!==null&&String(o[k]).trim()!=="")return o[k]}const want=names.map(x=>x.toLowerCase());for(const k of Object.keys(o)){if(want.includes(k.toLowerCase())&&o[k]!==undefined&&o[k]!==null&&String(o[k]).trim()!=="")return o[k]}return undefined};
+ const aliases=[
+  ["CDKey",["CDKey","Cdkey","cdkey"]],
+  ["EFUserName",["EFUserName","EFUsername","EF_USER_NAME"]],
+  ["EFPassword",["EFPassword","EF_Password","EF_PASS"]],
+  ["EInvUserName",["EInvUserName","EinvUserName","EInvoiceUserName","EInvUsername"]],
+  ["EInvPassword",["EInvPassword","EinvPassword","EInvoicePassword"]],
+  ["EWBUserName",["EWBUserName","EwbUserName","EWBUsername"]],
+  ["EWBPassword",["EWBPassword","EwbPassword"]]
+ ];
+ aliases.forEach(([key,names])=>{const v=pick(names);if(v!==undefined)o[key]=v});
+ return o;
+}
 function credEff(kind,live){
  const C=apiCfg();let cr={};
  try{cr=JSON.parse(C[credKey(kind,live)]||"{}")}catch(x){return null}
  if(!Object.keys(cr).length&&!live){const g=sbxFor(comp());if(g)cr=sbxCred(kind,g)}
- return cr;
+ return normalizeApiCreds(cr);
 }
 const credKey=(kind,live)=>(live?"live":"sand")+(kind==="ewb"?"w":"");
 const credInfo=(kind,e)=>{const C=apiCfg();const cr=credEff(kind,e==="l");const n=cr?Object.keys(cr).length:0;return n+" key(s) set, sent in the "+(C.mode==="headers"?"HTTP headers":"request body")};
