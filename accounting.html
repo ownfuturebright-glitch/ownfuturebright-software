@@ -3143,9 +3143,12 @@ async function validatePartyGstin(id){
 async function runGstinValidation(partyId){
  const parties=DB.party.filter(p=>(!partyId||p.id===partyId)&&String(p.gstin||"").trim());
  if(!parties.length){alert("No party with a GSTIN was found in Party Master.");return}
- const C=apiCfg();let cr={};try{cr=JSON.parse(C.live||"{}")}catch(e){alert("Fix the E-Invoice Live credentials JSON in Other → Webtel API Setting.");return}
- const cd=cr.CDKey||cr.Cdkey||cr.cdkey,efU=cr.EFUserName,efP=cr.EFPassword,eiU=cr.EInvUserName||cr.EInvoiceUserName,eiP=cr.EInvPassword||cr.EInvoicePassword;
- if(!cd||!efU||!efP||!eiU||!eiP){alert("For GSTIN lookup, enter CDKey, EFUserName, EFPassword, EInvUserName and EInvPassword in the E-Invoice Live credentials (Other → Webtel API Setting).");return}
+ const CE=credEff("einv",true),CW=credEff("ewb",true)||{};
+ if(CE===null){alert("The Live credentials in Webtel API Settings are not valid JSON. Please fix them (Other → Webtel API Settings).");return}
+ const pick=(...ks)=>{for(const o of [CE,CW]){for(const k of ks){const v=o&&o[k];if(v!==undefined&&v!==null&&String(v).trim()!=="")return String(v).trim()}}return ""};
+ const cd=pick("CDKey"),efU=pick("EFUserName"),efP=pick("EFPassword"),eiU=pick("EInvUserName"),eiP=pick("EInvPassword"),cgst=pick("GSTIN");
+ const miss=[["CD Key",cd],["EF User",efU],["EF Password",efP],["E-Invoice User",eiU],["E-Invoice Password",eiP]].filter(z=>!z[1]).map(z=>z[0]);
+ if(miss.length){alert("These details are missing in Webtel API Settings → Live Credentials for the current company ("+(comp().name||"-")+"):\n"+miss.join(", ")+"\n\nEnter them there and try GSTIN Validate again.");return}
  if(!confirm((partyId?"this party's GSTIN":""+parties.length+" GSTIN")+": a Webtel LIVE lookup will be done. Continue?"))return;
  const box=document.getElementById("gstin_bulk_result");if(box)box.innerHTML='<div class="empty">Checking GSTIN… please do not close the page.</div>';
  let ok=0,fail=0,updated=0,rows=[];
@@ -3154,7 +3157,7 @@ async function runGstinValidation(partyId){
  for(let i=0;i<parties.length;i++){
   const p=parties[i],gst=String(p.gstin).trim().toUpperCase();
   try{
-   const body={SearchGSTIN:gst,GSTIN:cr.GSTIN||comp().gstin||gst,CDKey:cd,EInvUserName:eiU,EInvPassword:eiP,EFUserName:efU,EFPassword:efP};
+   const body={SearchGSTIN:gst,GSTIN:cgst||comp().gstin||gst,CDKey:cd,EInvUserName:eiU,EInvPassword:eiP,EFUserName:efU,EFPassword:efP};
    const res=await fetch(urlOf("gstin",ACTS.gstin[0]),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
    const raw=await res.text();let j;try{j=JSON.parse(raw)}catch(e){throw new Error("API did not return a JSON response (HTTP "+res.status+")")}
    if(!res.ok)throw new Error("HTTP "+res.status);
