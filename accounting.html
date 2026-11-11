@@ -1607,6 +1607,17 @@ function billApply(d,blob){
   if(gt&&Math.abs(m.grand-gt)>1)warn.push("Total mismatch: bill says <b>₹"+n2(gt)+"</b>, entry computes <b>₹"+n2(m.grand)+"</b>. Check qty/rate/GST on each line.");
   if(miss.length)warn.push(miss.length+" item(s) not in Item Master: "+miss.map(z=>"<b>"+esc(z.x.description)+"</b>").join(", ")+". <a class=\"lnk\" onclick=\"billMakeItems()\">Create these items automatically</a>");
   RS.billMsg="✅ Bill read. <b>Check everything below, then Save.</b>"+(warn.length?"<br>⚠ "+warn.join("<br>⚠ "):"");
+  const needP=!pt&&!!(pn||pg),needI=miss.length>0;
+  if(needP||needI){
+   const q=[];if(needP)q.push("Party: "+(pn||pg)+(pg?" ("+pg+")":""));if(needI)q.push("Items ("+miss.length+"): "+miss.map(z=>z.x.description||"Item").join(", "));
+   if(confirm("These are not in your Masters yet:\n\n"+q.join("\n")+"\n\nOK = add them to Party Master / Item Master automatically.\nCancel = skip (you can add them manually)")){
+    if(needP){const np={id:uid(),name:String(pn||pg).trim(),type:sale?"Customer":"Supplier",phone:"",city:"",gstin:pg,addr:"",pin:"",stcode:pg.slice(0,2),opening:0};DB.party.push(np);f.party=np.id;f.gstin=pg;f.pos=stc(np)||f.pos}
+    if(needI)billCreateItems();
+    save();
+    const w2=warn.filter(w=>!/^Party <b>/.test(w)&&!/not in Item Master/.test(w));
+    RS.billMsg="✅ Bill read. "+(needP?"Party added to Party Master. ":"")+(needI?"Items added to Item Master. ":"")+"<b>Check everything below, then Save.</b>"+(w2.length?"<br>⚠ "+w2.join("<br>⚠ "):"");
+   }
+  }
 }
 function billPaste(){
  let dl=$("bill_dlg");if(!dl){dl=document.createElement("dialog");dl.id="bill_dlg";document.body.appendChild(dl)}
@@ -1682,12 +1693,16 @@ This is usually a pre-printed carbon-copy invoice where the buyer, items, quanti
  }catch(e){RS.billMsg="❌ Could not read bill: "+esc(e.message||e)}
  render();
 }
-function billMakeItems(){
+function billCreateItems(){
  const f=RS.sf,k=cur,rk=KC[k].rate;
  (RS.billMiss||[]).forEach(({l,x})=>{
   const it={id:uid(),name:String(x.description||"Item").trim(),code:"",unit:l.unit,hsn:l.hsn,gst:+l.gst||18,openq:0};it[rk]=+x.rate||0;
   DB.item.push(it);l.item=it.id;l.name=it.name});
- RS.billMiss=[];save();RS.billMsg="✅ Items created. <b>Check everything below, then Save.</b>";render();
+ RS.billMiss=[];
+}
+function billMakeItems(){
+ billCreateItems();
+ save();RS.billMsg="✅ Items created. <b>Check everything below, then Save.</b>";render();
 }
 
 function saleSave(){
