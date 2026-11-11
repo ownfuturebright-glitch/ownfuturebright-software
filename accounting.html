@@ -275,7 +275,7 @@ main{min-width:0;width:calc(100% - 230px)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const UNITS=["Nos","Pcs","Kg","Gm","Ltr","Box","Mtr","Dozen"];
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 const tx=(t)=>({title:t,tx:1,f:[
  {k:"date",l:"Date",t:"date",r:1},{k:"inv",l:"Invoice / Bill No"},{k:"party",l:"Party",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},
  {k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"remark",l:"Remark"}]});
@@ -1607,16 +1607,15 @@ function billApply(d,blob){
   if(gt&&Math.abs(m.grand-gt)>1)warn.push("Total mismatch: bill says <b>₹"+n2(gt)+"</b>, entry computes <b>₹"+n2(m.grand)+"</b>. Check qty/rate/GST on each line.");
   if(miss.length)warn.push(miss.length+" item(s) not in Item Master: "+miss.map(z=>"<b>"+esc(z.x.description)+"</b>").join(", ")+". <a class=\"lnk\" onclick=\"billMakeItems()\">Create these items automatically</a>");
   RS.billMsg="✅ Bill read. <b>Check everything below, then Save.</b>"+(warn.length?"<br>⚠ "+warn.join("<br>⚠ "):"");
-  const needP=!pt&&!!(pn||pg),needI=miss.length>0;
-  if(needP||needI){
-   const q=[];if(needP)q.push("Party: "+(pn||pg)+(pg?" ("+pg+")":""));if(needI)q.push("Items ("+miss.length+"): "+miss.map(z=>z.x.description||"Item").join(", "));
-   if(confirm("These are not in your Masters yet:\n\n"+q.join("\n")+"\n\nOK = add them to Party Master / Item Master automatically.\nCancel = skip (you can add them manually)")){
-    if(needP){const np={id:uid(),name:String(pn||pg).trim(),type:sale?"Customer":"Supplier",phone:"",city:"",gstin:pg,addr:"",pin:"",stcode:pg.slice(0,2),opening:0};DB.party.push(np);f.party=np.id;f.gstin=pg;f.pos=stc(np)||f.pos}
-    if(needI)billCreateItems();
-    save();
-    const w2=warn.filter(w=>!/^Party <b>/.test(w)&&!/not in Item Master/.test(w));
-    RS.billMsg="✅ Bill read. "+(needP?"Party added to Party Master. ":"")+(needI?"Items added to Item Master. ":"")+"<b>Check everything below, then Save.</b>"+(w2.length?"<br>⚠ "+w2.join("<br>⚠ "):"");
-   }
+  const needP=!pt&&!!(pn||pg),needI=miss.length>0;let addedP=false,addedI=false;
+  if(needP&&confirm("Party not found in Party Master:\n\n"+(pn||pg)+(pg?" ("+pg+")":"")+"\n\nOK = add this party to Party Master\nCancel = skip")){
+   const np={id:uid(),name:String(pn||pg).trim(),type:sale?"Customer":"Supplier",phone:"",city:"",gstin:pg,addr:"",pin:"",stcode:pg.slice(0,2),opening:0};DB.party.push(np);f.party=np.id;f.gstin=pg;f.pos=stc(np)||f.pos;addedP=true}
+  if(needI&&confirm(miss.length+" item(s) not found in Item Master:\n\n"+miss.map(z=>"• "+(z.x.description||"Item")).join("\n")+"\n\nOK = add these items to Item Master\nCancel = skip")){
+   billCreateItems();addedI=true}
+  if(addedP||addedI){
+   save();
+   const w2=warn.filter(w=>!(addedP&&/^Party <b>/.test(w))&&!(addedI&&/not in Item Master/.test(w)));
+   RS.billMsg="✅ Bill read. "+(addedP?"Party added to Party Master. ":"")+(addedI?"Items added to Item Master. ":"")+"<b>Check everything below, then Save.</b>"+(w2.length?"<br>⚠ "+w2.join("<br>⚠ "):"");
   }
 }
 function billPaste(){
@@ -1705,19 +1704,61 @@ function billMakeItems(){
  save();RS.billMsg="✅ Items created. <b>Check everything below, then Save.</b>";render();
 }
 
+/* ----- quick add item from invoice row / auto-create missing items ----- */
+function sfItemFromRow(l){
+ const n=String(l.name||"").trim(),rk=KC[cur].rate;if(!n)return null;
+ let it=DB.item.find(z=>String(z.name||"").trim().toLowerCase()===n.toLowerCase()||(z.code&&String(z.code).trim().toLowerCase()===n.toLowerCase())),made=false;
+ if(!it){it={id:uid(),name:n,code:"",unit:l.unit||"Nos",hsn:l.hsn||"",gst:(l.gst===""||l.gst==null)?18:+l.gst,openq:0};it[rk]=+l.rate||0;DB.item.push(it);made=true}
+ l.item=it.id;l.name=it.name;
+ return {it,made};
+}
+function sfAddItem(i){
+ const f=RS.sf;if(!f||!f.items[i])return;
+ const r=sfItemFromRow(f.items[i]);if(!r){alert("Type the item name first");return}
+ if(r.made){save();toast("\u201C"+r.it.name+"\u201D added to Item Master");render()}
+ else sfPick(i,r.it.name,r.it);
+}
+function sfMissingNames(){
+ const seen={},out=[];
+ RS.sf.items.forEach(l=>{const n=String(l.name||"").trim();if(n&&!l.item&&+l.qty>0){const k=n.toLowerCase();if(!seen[k]){seen[k]=1;out.push(n)}}});
+ return out;
+}
+function sfEnsureItems(){RS.sf.items.forEach(l=>{if(String(l.name||"").trim()&&!l.item&&+l.qty>0)sfItemFromRow(l)})}
+/* ----- Register period helpers ----- */
+function periodSync(d){
+ if(!d||!/^\d{4}-\d{2}/.test(d))return "";
+ const rg=reportPeriodRange();if(d>=rg.from&&d<=rg.to)return "";
+ const y=+d.slice(0,4),m=+d.slice(5,7);
+ RS.periodType="Month";RS.periodMonth=String(m);RS.periodFY=m>=4?y:y-1;
+ return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1]+" "+y;
+}
+function regOutBanner(rk,k,rg){
+ const out=DB[k].filter(x=>x.date&&(x.date<rg.from||x.date>rg.to));if(!out.length)return "";
+ return `<div style="background:#fff7e0;border:1px solid #f0d27a;color:#7a5a00;padding:9px 12px;border-radius:8px;margin:8px 0;font-size:13px">⚠ ${out.length} ${out.length>1?"entries are":"entry is"} outside the selected period/dates (${fd(rg.from)} – ${fd(rg.to)}) and not shown here. <a class="lnk" onclick="regShowAll('${rk}','${k}')">Show all entries</a></div>`;
+}
+function regShowAll(rk,k){const ds=DB[k].map(x=>x.date).filter(Boolean).sort();if(!ds.length)return;RS.rf[rk]=RS.rf[rk]||{};RS.rf[rk].date=ds[0];RS.rf[rk].dateTo=ds[ds.length-1];render()}
 function saleSave(){
- const f=RS.sf;if(!f)return; if(cur==="sale"&&f.id&&liveIrnLocked("sale",f.id)){alert("Live E-Invoice का IRN बन चुका है। Edit स्क्रीन खुल सकती है, लेकिन Save बंद है।");return} const rec=sfBuild();
- if(!String(f.no).trim()){alert(KC[cur].no+" is required");return}
- if(!f.date){alert("Date is required");return}
+ const f=RS.sf;if(!f)return; if(cur==="sale"&&f.id&&liveIrnLocked("sale",f.id)){alert("Live E-Invoice का IRN बन चुका है। Edit स्क्रीन खुल सकती है, लेकिन Save बंद है।");return} if(!String(f.no).trim()){alert(KC[cur].no+" is required");return}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(f.date||"")){alert("Date is required");return}
+ const yr=+f.date.slice(0,4);if(yr<2000||yr>2100){alert("Please check the date: year "+yr+" looks wrong.");return}
  if(!f.party){alert("Please select a party");return}
+ const invNo=sfFull().trim(),dup=DB[cur].find(x=>x.id!==f.id&&x.inv===invNo&&(KC[cur].own||x.party===f.party));
+ if(dup){
+  if(confirm(KC[cur].no+" "+invNo+" already exists (Date "+fd(dup.date)+", "+lookup("party",dup.party)+", ₹"+n2(dup.amount||0)+").\n\nOpen the existing entry?")){periodSync(dup.date);openSale(dup.id)}
+  return}
+ const miss=sfMissingNames();
+ if(miss.length){
+  if(!confirm("These items are not in your Item Master:\n\n• "+miss.join("\n• ")+"\n\nAdd them to Item Master and save this invoice?"))return;
+  sfEnsureItems();save();
+ }
+ const rec=sfBuild();
  if(!rec.items.length||rec.items.some(l=>!l.item||l.qty<=0)){alert("Add at least one item. Every row needs an item picked from the list and a quantity.");return}
- if(DB[cur].some(x=>x.id!==f.id&&x.inv===rec.inv&&(KC[cur].own||x.party===rec.party))){alert(KC[cur].no+" "+rec.inv+" already exists");return}
  const isNew=!f.id;
  if(isNew)rec.id=uid();
  if(f.billBlob){rec.hasBill=true;bdbPut(rec.id,f.billBlob)}else if(!isNew){const o0=DB[cur].find(x=>x.id===f.id);if(o0&&o0.hasBill)rec.hasBill=true}
  if(isNew){DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]=rec}
  RS.billMsg="";RS.billMiss=[];
- save();toast(M[cur].title+" "+rec.inv+" saved");
+ save();const psl=periodSync(rec.date);toast(M[cur].title+" "+rec.inv+" saved"+(psl?" • Register now showing "+psl:""));
  RS.sf=isNew?newSaleForm():null;if(!isNew&&RS.back){cur=RS.back;RS.back=null}render();
 }
 /* ===== Print: Software print / E-Invoice print / E-Way Bill print ===== */
@@ -3137,7 +3178,7 @@ const SAVEICO='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" strok
 function sfRowHtml(l,i,m){
  const o=m.L[i],bad=l.name&&!l.item,gl=[...new Set([...GSTR,+l.gst||0])].sort((a,b)=>a-b);
  const num=(k,w)=>`<input type="number" step="any" min="0" style="width:${w}px" value="${esc(l[k])}" oninput="sfRow(${i},'${k}',this.value)">`;
- return `<tr><td>${i+1}</td><td><input list="dl_items" style="min-width:190px;${bad?"border-color:#e53935":""}" placeholder="Search item..." value="${esc(l.name)}" onchange="sfPick(${i},this.value)"></td><td><input style="width:90px" value="${esc(l.hsn)}" oninput="sfRow(${i},'hsn',this.value)"></td><td><select style="width:80px" onchange="sfRow(${i},'unit',this.value)">${UNITS.map(u=>`<option ${u===l.unit?"selected":""}>${u}</option>`).join("")}</select></td><td>${num("qty",80)}</td><td>${num("rate",95)}</td><td>${num("disc",80)}</td><td id="c_t${i}">₹${n2(o.t)}</td><td><select style="width:74px" onchange="sfRow(${i},'gst',this.value)">${gl.map(g=>`<option ${String(g)===String(+l.gst)?"selected":""}>${g}</option>`).join("")}</select></td>${m.intra?`<td id="c_c${i}">₹${n2(o.cg)}</td><td id="c_s${i}">₹${n2(o.sg)}</td>`:`<td id="c_g${i}">₹${n2(o.ig)}</td>`}<td id="c_o${i}"><b>₹${n2(o.tot)}</b></td><td><button class="d" style="padding:3px 8px" onclick="sfDel(${i})" title="Remove row">✕</button></td></tr>`;
+ return `<tr><td>${i+1}</td><td><input list="dl_items" style="min-width:190px;${bad?"border-color:#e53935":""}" placeholder="Search item..." value="${esc(l.name)}" onchange="sfPick(${i},this.value)">${bad?`<div style="margin-top:4px;white-space:nowrap"><a class="lnk" style="font-size:12px;color:#e53935" onclick="sfAddItem(${i})">➕ Add “${esc(l.name)}” to Item Master</a></div>`:""}</td><td><input style="width:90px" value="${esc(l.hsn)}" oninput="sfRow(${i},'hsn',this.value)"></td><td><select style="width:80px" onchange="sfRow(${i},'unit',this.value)">${UNITS.map(u=>`<option ${u===l.unit?"selected":""}>${u}</option>`).join("")}</select></td><td>${num("qty",80)}</td><td>${num("rate",95)}</td><td>${num("disc",80)}</td><td id="c_t${i}">₹${n2(o.t)}</td><td><select style="width:74px" onchange="sfRow(${i},'gst',this.value)">${gl.map(g=>`<option ${String(g)===String(+l.gst)?"selected":""}>${g}</option>`).join("")}</select></td>${m.intra?`<td id="c_c${i}">₹${n2(o.cg)}</td><td id="c_s${i}">₹${n2(o.sg)}</td>`:`<td id="c_g${i}">₹${n2(o.ig)}</td>`}<td id="c_o${i}"><b>₹${n2(o.tot)}</b></td><td><button class="d" style="padding:3px 8px" onclick="sfDel(${i})" title="Remove row">✕</button></td></tr>`;
 }
 const GSTR=[0,5,12,18,28];
 function renderSale(){
@@ -3174,7 +3215,7 @@ function renderSale(){
  const l=all.filter(r=>rfPass(rk,r));let tv=0,tx=0,tt=0;
  const rows=l.map((r,i)=>{tv+=r.g.tv;tx+=r.g.tax;tt+=r.t;const x=r.x;
   return [i+1,fd(x.date),`<a class="lnk" style="font-size:13px" onclick="regOpen('${k}','${x.id}')" title="Open this entry">${esc(r.no)}</a>`,esc(r.party),esc(lineSum(x)),n2(r.g.tv),n2(r.g.tax),n2(r.t),esc(x.remark||""),act(k,x.id)]});
- return rfBar(rk,{period:1,noCr:1,drL:"Total Amount",textL:"Party / Items / Narration",noL:KC[k].no.replace(".","")})+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration","Action"],rows,`Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
+ return rfBar(rk,{period:1,noCr:1,drL:"Total Amount",textL:"Party / Items / Narration",noL:KC[k].no.replace(".","")})+regOutBanner(rk,k,rg)+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration","Action"],rows,`Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
 
 let cur="dashboard",editId=null;
 const $=id=>document.getElementById(id);
