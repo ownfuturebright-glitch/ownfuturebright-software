@@ -488,7 +488,18 @@ function book(title,pick){
 function outst(recv){
  const l=DB.party.map(p=>[p,(partySide(p)||{}).amt,(partySide(p)||{}).side]).filter(([p,b,sd])=>sd===(recv?"recv":"pay"));
  const t=l.reduce((a,[p,b])=>a+b,0);
- return tbl(["Party","GSTIN","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.gstin||""),esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))+(b<0?" (Advance)":"")]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+ return tbl(["Party","GSTIN","Phone","City","Amount","WhatsApp Reminder"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.gstin||""),esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))+(b<0?" (Advance)":""),`<button type="button" style="background:#25a244;padding:5px 10px" onclick="waOutstanding('${p.id}',${recv?1:0})">WhatsApp</button>`]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+}
+function waOutstanding(id,recv){
+ const p=DB.party.find(x=>x.id===id);if(!p)return;
+ let ph=String(p.phone||"").replace(/\\D/g,"");
+ if(ph.length===10)ph="91"+ph;
+ if(!ph){alert("Party Master में इस Party का Phone Number नहीं है।");return}
+ const side=partySide(p),amount=n2(Math.abs(side?side.amt:0)),company=comp().name||"";
+ const msg=recv
+  ?`नमस्ते ${p.name}, ${company} की ओर से भुगतान अनुस्मारक। आपके खाते में ₹${amount} बकाया है। कृपया सुविधानुसार भुगतान करें। धन्यवाद।`
+  :`नमस्ते ${p.name}, ${company} की ओर से सूचना। आपके खाते में ₹${amount} का भुगतान हमारी ओर से बकाया है। कृपया अपने खाते का मिलान कर लें। धन्यवाद।`;
+ window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(msg),"_blank","noopener");
 }
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
