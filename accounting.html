@@ -1563,13 +1563,13 @@ function sfBuild(){
 /* ===== Attach Bill -> auto-fill entry (AI reads bill photo; user reviews, then saves) ===== */
 const AI_MODEL="claude-sonnet-5-5",GEMINI_MODEL="gemini-flash-latest";
 const aiKey=()=>{try{return localStorage.getItem("acc_ai_key")||""}catch(e){return""}};
-function billKey(){const v=prompt("Paste a free Google Gemini key (AIza...) from aistudio.google.com, or an Anthropic key. Stored only in this browser, not in backup/cloud:",aiKey());if(v===null)return;const k2=v.replace(/["'\s]/g,"");if(k2&&!/^(sk-ant-|AIza)/.test(k2)){alert("Key not recognised. Use a free Google Gemini key (starts with AIza, from aistudio.google.com) or an Anthropic key (starts with sk-ant-).");return}try{localStorage.setItem("acc_ai_key",k2)}catch(e){}RS.billMsg="";render()}
+function billKey(){const v=prompt("Paste a free Google Gemini key (AQ.Ab... or AIza...) from aistudio.google.com, or an Anthropic key. Stored only in this browser, not in backup/cloud:",aiKey());if(v===null)return;const k2=v.replace(/["'\s]/g,"");if(k2&&!/^(sk-ant-|AIza|AQ\.)/.test(k2)){alert("Key not recognised. Use a free Google Gemini key (starts with AQ. or AIza, from aistudio.google.com) or an Anthropic key (starts with sk-ant-).");return}try{localStorage.setItem("acc_ai_key",k2)}catch(e){}RS.billMsg="";render()}
 function bdb(){return new Promise((ok,no)=>{const r=indexedDB.open("acc_bills",1);r.onupgradeneeded=()=>r.result.createObjectStore("b");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
 async function bdbPut(id,blob){try{const d=await bdb();d.transaction("b","readwrite").objectStore("b").put(blob,id)}catch(e){}}
 async function bdbGet(id){try{const d=await bdb();return await new Promise(ok=>{const q=d.transaction("b").objectStore("b").get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)})}catch(e){return null}}
 async function billView(id){const b=await bdbGet(id);if(!b){alert("Bill image is not stored on this device");return}window.open(URL.createObjectURL(b),"_blank")}
 function billCard(){
- if(aiKey()&&!/^(sk-ant-|AIza)/.test(aiKey())){try{localStorage.removeItem("acc_ai_key")}catch(e){}}
+ if(aiKey()&&!/^(sk-ant-|AIza|AQ\.)/.test(aiKey())){try{localStorage.removeItem("acc_ai_key")}catch(e){}}
  const f=RS.sf,k=cur,has=aiKey(),st=RS.billMsg||"";
  return `<div class="sc"><div class="sh">📎 Attach One Bill (Photo / PDF Auto-fill)</div><div class="sb" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
  <input type="file" accept="application/pdf,image/*" id="bill_file" style="flex:1;min-width:200px" onchange="billRead(this)">
@@ -1666,7 +1666,7 @@ async function billReadFile(file){
   const prompt_=`This is a photo of an Indian GST tax invoice (may be rotated/sideways, handwritten entries, pink carbon copy). Read it carefully and return ONLY a JSON object, no other text:
 {"invoice_no":"","date":"YYYY-MM-DD","seller_name":"","seller_gstin":"","buyer_name":"","buyer_gstin":"","buyer_state_code":"","items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"amount":0}],"taxable_total":0,"igst_percent":0,"cgst_percent":0,"sgst_percent":0,"tax_total":0,"grand_total":0}
 This is usually a pre-printed carbon-copy invoice where the buyer, items, quantities, rates, amounts and totals are handwritten in pen; ignore ink stamps and signatures. Use the arithmetic to resolve unclear digits: qty x rate = amount, the amounts add up to the taxable total, and IGST (or CGST+SGST) = 18% of it unless the bill shows another rate. Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
-  const key=aiKey(),gem=/^AIza/.test(key);let txt="";
+  const key=aiKey(),gem=!/^sk-ant-/.test(key);let txt="";
   if(gem){
    const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent?key="+encodeURIComponent(key),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt_},{inline_data:{mime_type:"image/jpeg",data:b64}}]}],generationConfig:{temperature:0,responseMimeType:"application/json"}})});
    const j=await r.json();if(!r.ok){const em=(j.error&&j.error.message)||("HTTP "+r.status);if(/api key|permission|unauthenticated/i.test(em)){try{localStorage.removeItem("acc_ai_key")}catch(e){}throw new Error("Gemini key was rejected, so it has been removed. Create a key at aistudio.google.com and set it again.")}if(r.status===429)throw new Error("Free limit reached for now. Wait a minute and try again, or use Paste bill data.");throw new Error(em)}
