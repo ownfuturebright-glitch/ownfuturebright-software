@@ -1561,18 +1561,18 @@ function sfBuild(){
  return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,discMode:f.dmode==="pre"?"pre":"post",invDisc:r2(m.idisc),postDisc:r2(m.idPost),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
 }
 /* ===== Attach Bill -> auto-fill entry (AI reads bill photo; user reviews, then saves) ===== */
-const AI_MODEL="claude-sonnet-5-5";
+const AI_MODEL="claude-sonnet-5-5",GEMINI_MODEL="gemini-flash-latest";
 const aiKey=()=>{try{return localStorage.getItem("acc_ai_key")||""}catch(e){return""}};
-function billKey(){const v=prompt("Enter Anthropic API key (stored only in this browser, not in backup/cloud):",aiKey());if(v===null)return;const k2=v.replace(/["'\s]/g,"");if(k2&&!/^sk-ant-/.test(k2)){alert("This does not look like an Anthropic API key. It must start with sk-ant- (create it at console.anthropic.com > API Keys). A Claude.ai login or an OpenAI/Gemini key will not work.");return}try{localStorage.setItem("acc_ai_key",k2)}catch(e){}RS.billMsg="";render()}
+function billKey(){const v=prompt("Paste a free Google Gemini key (AIza...) from aistudio.google.com, or an Anthropic key. Stored only in this browser, not in backup/cloud:",aiKey());if(v===null)return;const k2=v.replace(/["'\s]/g,"");if(k2&&!/^(sk-ant-|AIza)/.test(k2)){alert("Key not recognised. Use a free Google Gemini key (starts with AIza, from aistudio.google.com) or an Anthropic key (starts with sk-ant-).");return}try{localStorage.setItem("acc_ai_key",k2)}catch(e){}RS.billMsg="";render()}
 function bdb(){return new Promise((ok,no)=>{const r=indexedDB.open("acc_bills",1);r.onupgradeneeded=()=>r.result.createObjectStore("b");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
 async function bdbPut(id,blob){try{const d=await bdb();d.transaction("b","readwrite").objectStore("b").put(blob,id)}catch(e){}}
 async function bdbGet(id){try{const d=await bdb();return await new Promise(ok=>{const q=d.transaction("b").objectStore("b").get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)})}catch(e){return null}}
 async function billView(id){const b=await bdbGet(id);if(!b){alert("Bill image is not stored on this device");return}window.open(URL.createObjectURL(b),"_blank")}
 function billCard(){
- if(aiKey()&&!/^sk-ant-/.test(aiKey())){try{localStorage.removeItem("acc_ai_key")}catch(e){}}
+ if(aiKey()&&!/^(sk-ant-|AIza)/.test(aiKey())){try{localStorage.removeItem("acc_ai_key")}catch(e){}}
  const f=RS.sf,k=cur,has=aiKey(),st=RS.billMsg||"";
- return `<div class="sc"><div class="sh">📎 Attach Bill (auto-fill)</div><div class="sb" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
- <input type="file" accept="image/*" id="bill_file" style="flex:1;min-width:200px" onchange="billRead(this)" ${has?"":"disabled"}>
+ return `<div class="sc"><div class="sh">📎 Attach Bill (PDF auto-fill)</div><div class="sb" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+ <input type="file" accept="application/pdf,image/*" id="bill_file" style="flex:1;min-width:200px" onchange="billRead(this)">
  <a class="lnk" onclick="billPaste()">Paste bill data</a>
  <a class="lnk" onclick="billKey()">${has?"Change AI key":"Set AI key (optional)"}</a>${has?` <a class="lnk" onclick="try{localStorage.removeItem('acc_ai_key')}catch(e){}RS.billMsg='';render()">Remove AI key</a>`:""}
  ${f.id&&DB[k].find(x=>x.id===f.id&&x.hasBill)?`<a class="lnk" onclick="billView('${f.id}')">View saved bill</a>`:""}
@@ -1617,18 +1617,65 @@ function billPasteApply(){
   $("bill_dlg").close();RS.billQ=arr.slice(1);billApply(arr[0],null);if(RS.billQ.length)RS.billMsg+="<br>📚 "+RS.billQ.length+" more bill(s) queued — they open one by one after you Save.";render()}
  catch(e){alert("Could not read this data: "+(e.message||e))}
 }
+/* ===== PDF bill (Busy-style Tax Invoice): rule-based reading, no AI / no key ===== */
+function loadPdfJs(){return new Promise((ok,no)=>{if(window.pdfjsLib)return ok();const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";sc.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";ok()};sc.onerror=()=>no(new Error("PDF reader could not be loaded (internet needed once)"));document.head.appendChild(sc)})}
+async function pdfText(file){
+ await loadPdfJs();const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let t="";
+ for(let p=1;p<=pdf.numPages;p++){const pg=await pdf.getPage(p),c=await pg.getTextContent();let ly=null;
+  c.items.forEach(it=>{if(ly!==null&&Math.abs(it.transform[5]-ly)>3)t+="\n";t+=it.str+" ";ly=it.transform[5]});t+="\n"}
+ return t;
+}
+function pdfParseBusy(raw){
+ const lines=raw.split("\n").map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean),J=lines.join("\n"),num=v=>parseFloat(String(v||"").replace(/,/g,""))||0;
+ const dd=l=>{const w=l.trim().split(/\s+/),n=w.length;if(n>=2&&n%2===0&&w.slice(0,n/2).join(" ")===w.slice(n/2).join(" "))return w.slice(0,n/2).join(" ");return l.trim()};
+ const d={items:[]};let m;
+ m=J.match(/GSTIN\s*:\s*([0-9A-Z]{15})/);if(m)d.seller_gstin=m[1];
+ const ti=lines.findIndex(l=>/TAX\s*INVOICE/i.test(l));if(ti>=0&&lines[ti+1])d.seller_name=lines[ti+1];
+ m=J.match(/Invoice No\.?\s*:\s*(\S+)/i);if(m)d.invoice_no=m[1];
+ m=J.match(/Dated\s*:\s*(\d{2})-(\d{2})-(\d{4})/i);if(m)d.date=m[3]+"-"+m[2]+"-"+m[1];
+ const bt=lines.findIndex(l=>/^Billed to\s*:/i.test(l));if(bt>=0&&lines[bt+1])d.buyer_name=dd(lines[bt+1]);
+ m=[...J.matchAll(/GSTIN\s*\/\s*UIN\s*:\s*([0-9A-Z]{15})/gi)];if(m.length)d.buyer_gstin=m[0][1];
+ lines.forEach(l=>{const x=l.match(/^(\d+)\.\s+(.+?)\s+(\d{4,8})\s+([\d,]+(?:\.\d+)?)\s+([A-Za-z.]+)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/);
+  if(x)d.items.push({description:x[2].trim(),hsn:x[3],qty:num(x[4]),unit:x[5].replace(".",""),rate:num(x[6]),amount:num(x[7])})});
+ m=J.match(/IGST\s*@\s*([\d.]+)\s*%/i);if(m)d.igst_percent=+m[1];
+ m=J.match(/CGST\s*@\s*([\d.]+)\s*%/i);if(m)d.cgst_percent=+m[1];
+ m=J.match(/SGST\s*@\s*([\d.]+)\s*%/i);if(m)d.sgst_percent=+m[1];
+ m=J.match(/Grand Total[^0-9]*[\d.]+\s*\S*\s*`?\s*([\d,]+\.\d{2})/i);if(m)d.grand_total=num(m[1]);
+ return d;
+}
+async function billPdf(file){
+ RS.billMsg="⏳ Reading PDF...";render();
+ try{
+  const d=pdfParseBusy(await pdfText(file));
+  if(!d.items.length&&!d.invoice_no)throw new Error("No invoice text found in this PDF (scanned/photo PDF). Use Paste bill data instead.");
+  billApply(d,file);
+  if(!d.items.length)RS.billMsg+="<br>⚠ No item rows could be read. Add items manually.";
+ }catch(e){RS.billMsg="❌ Could not read PDF: "+esc(e.message||e)}
+ render();
+}
+
 async function billRead(el){
  const file=el.files&&el.files[0];if(!file||!RS.sf)return;
+ if(file.type==="application/pdf"||/\.pdf$/i.test(file.name)){billPdf(file);return}
+ if(!aiKey()){RS.billMsg="📷 Photo / handwritten bills need an AI key: click <b>Set AI key</b> and paste a free Google Gemini key (aistudio.google.com). Or attach a PDF invoice, or use <b>Paste bill data</b>.";render();return}
  const k=cur,sale=(k==="sale"||k==="salereturn");
  RS.billMsg="⏳ Reading bill... (10–20 seconds)";render();
  try{
   const {blob,b64}=await billShrink(file,1800);
   const prompt_=`This is a photo of an Indian GST tax invoice (may be rotated/sideways, handwritten entries, pink carbon copy). Read it carefully and return ONLY a JSON object, no other text:
 {"invoice_no":"","date":"YYYY-MM-DD","seller_name":"","seller_gstin":"","buyer_name":"","buyer_gstin":"","buyer_state_code":"","items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"amount":0}],"taxable_total":0,"igst_percent":0,"cgst_percent":0,"sgst_percent":0,"tax_total":0,"grand_total":0}
-Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:AI_MODEL,max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt_}]}]})});
+This is usually a pre-printed carbon-copy invoice where the buyer, items, quantities, rates, amounts and totals are handwritten in pen; ignore ink stamps and signatures. Use the arithmetic to resolve unclear digits: qty x rate = amount, the amounts add up to the taxable total, and IGST (or CGST+SGST) = 18% of it unless the bill shows another rate. Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
+  const key=aiKey(),gem=/^AIza/.test(key);let txt="";
+  if(gem){
+   const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent?key="+encodeURIComponent(key),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt_},{inline_data:{mime_type:"image/jpeg",data:b64}}]}],generationConfig:{temperature:0,responseMimeType:"application/json"}})});
+   const j=await r.json();if(!r.ok){const em=(j.error&&j.error.message)||("HTTP "+r.status);if(/api key|permission|unauthenticated/i.test(em)){try{localStorage.removeItem("acc_ai_key")}catch(e){}throw new Error("Gemini key was rejected, so it has been removed. Create a key at aistudio.google.com and set it again.")}if(r.status===429)throw new Error("Free limit reached for now. Wait a minute and try again, or use Paste bill data.");throw new Error(em)}
+   txt=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(x=>x.text||"").join("").replace(/```json|```/g,"").trim();
+  }else{
+   const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:AI_MODEL,max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt_}]}]})});
   const j=await r.json();if(!r.ok)if(r.status===401){try{localStorage.removeItem("acc_ai_key")}catch(e){}}throw new Error(r.status===401?"The saved AI key was rejected, so it has been removed. Use Paste bill data instead, or set a valid Anthropic key (sk-ant-...).":r.status===400&&/credit/i.test((j.error&&j.error.message)||"")?"No API credits. Add credits in console.anthropic.com > Billing.":((j.error&&j.error.message)||("HTTP "+r.status)));
-  const txt=(j.content||[]).map(c=>c.text||"").join("").replace(/```json|```/g,"").trim();
+  txt=(j.content||[]).map(c=>c.text||"").join("").replace(/```json|```/g,"").trim();
+  }
+
   const d=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
   billApply(d,blob);
  }catch(e){RS.billMsg="❌ Could not read bill: "+esc(e.message||e)}
