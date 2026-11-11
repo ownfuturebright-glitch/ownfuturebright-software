@@ -611,7 +611,7 @@ const R={
   const bl=DB.party.map(partySide).filter(Boolean),rc=bl.filter(x=>x.side==="recv").reduce((a,x)=>a+x.amt,0),pb=bl.filter(x=>x.side==="pay").reduce((a,x)=>a+x.amt,0),[c,b]=cashBank(),sv=stockVal();
   return tbl(["Particulars","Amount (₹)"],[["Receivable (Debtors)",n2(rc)],["Payable (Creditors)",n2(pb)],["Cash in Hand",n2(c)],["Bank / UPI / Cheque",n2(b)],["Stock Value",n2(sv)],["<b>Net (Receivable + Cash + Bank + Stock − Payable)</b>",`<b>${n2(rc+c+b+sv-pb)}</b>`]])}},
  ledger:{t:"Party Ledger",f(){
-  const key="ledger",pid=RS.party,rg=rfRange(key,1),txt=rfTextOn(key);
+  const key="ledger",pid=RS.party,rg=rfRange(key),txt=rfTextOn(key);
   const pre=`<div><label>Party</label><select onchange="RS.party=this.value;render()"><option value="">All Parties</option>${DB.party.map(p=>`<option value="${p.id}" ${p.id===pid?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>`;
   const parties=DB.party.filter(p=>!pid||p.id===pid).slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
   const rows=[];let n=0,td=0,tc=0,tb=0,cnt=0;
@@ -627,7 +627,7 @@ const R={
    out.forEach(r=>{n++;td+=r.dr;tc+=r.cr;rows.push([n,fd(r.date),esc(r.party),esc(r.type),esc(r.no),esc(r.part),n2(r.dr),n2(r.cr),dc(r.bal),act(r.k,r.id)])});
    if(!pid){const c=blank();c[2]=`<b>${esc(p.name)}</b>`;c[3]="<i>Closing Balance</i>";c[8]=`<b>${dc(b)}</b>`;rows.push(c)}
   });
-  return rfBar(key,{pre,types:VTYPES,textL:"Party / Remark",noL:"Voucher No."})+tbl(["#","Date","Party","Voucher","Voucher No.","Remark","Debit","Credit","Balance","Action"],rows,
+  return reportPeriodControls()+rfBar(key,{pre,types:VTYPES,textL:"Party / Remark",noL:"Voucher No."})+tbl(["#","Date","Party","Voucher","Voucher No.","Remark","Debit","Credit","Balance","Action"],rows,
    `Parties: ${cnt} &nbsp; Entries: ${n} &nbsp; Debit: ₹ ${n2(td)} &nbsp; Credit: ₹ ${n2(tc)} &nbsp; ${pid?"Closing":"Net Closing"}: ₹ ${dc(tb)}`)}},
  itemledger:{t:"Item Ledger",f(){
   const key="itemledger",pid=RS.item,pr=rfRange(key),txt=rfTextOn(key);
