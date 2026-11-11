@@ -488,7 +488,7 @@ function book(title,pick){
 function outst(recv){
  const l=DB.party.map(p=>[p,(partySide(p)||{}).amt,(partySide(p)||{}).side]).filter(([p,b,sd])=>sd===(recv?"recv":"pay"));
  const t=l.reduce((a,[p,b])=>a+b,0);
- return tbl(["Party","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))+(b<0?" (Advance)":"")]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
+ return tbl(["Party","GSTIN","Phone","City","Amount"],l.map(([p,b])=>[`<a class="lnk" style="font-size:13px" onclick="ledgerOf('${p.id}')" title="Open party ledger">${esc(p.name)}</a>`,esc(p.gstin||""),esc(p.phone||""),esc(p.city||""),n2(Math.abs(b))+(b<0?" (Advance)":"")]),`Total ${recv?"Receivable":"Payable"}: ₹ ${n2(t)}`);
 }
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
