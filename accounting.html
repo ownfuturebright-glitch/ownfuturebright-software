@@ -290,10 +290,10 @@ const M={
  payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  journal:{title:"Journal Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date"},{k:"accounts",l:"Accounts (Dr → Cr)"},{k:"amount",l:"Amount"},{k:"remark",l:"Narration"}]}
 };
-const GROUPS=[["Company","🏢",["company"]],["Master","📦",["party","item","users"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
+const GROUPS=[["Company","🏢",["company"]],["Master","📦",["party","item","partytransfer","users"]],["Transactions","🗎",["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","autopo"]],["Utility","🛠️",["gstlogin","gstr1","gstreminder","payremind","einvsand","einvlive","ewbsand","ewblive"]],["Display","📖",["accbook","daybook","outstanding","finalres","ledger","itemledger","stockstatus"]],["Other","🗃️",["invset","apiset","urlset","backup"]]];
 const CH={accbook:["cashbook","bankbook","journalbook","saleregister","purchaseregister","receiptregister","paymentregister","salereturnregister","purchasereturnregister"],outstanding:["recv","pay"],finalres:["trading","finpos"]};
-const PT={users:"User Management",accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
-const ICON={company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",users:"👤",invset:"🔢",apiset:"🔑",urlset:"🔗"};
+const PT={partytransfer:"Party Transfer",users:"User Management",accbook:"Accounts Book",outstanding:"Outstanding Analysis",finalres:"Final Result"};
+const ICON={partytransfer:"🔁",company:"🏢",party:"👥",item:"📦",stock:"📊",sale:"🧾",purchase:"🛒",salereturn:"🧾",purchasereturn:"🛒",receipt:"✉️",payment:"✉️",journal:"⚖️",accbook:"📘",daybook:"📅",outstanding:"₹",finalres:"⚖️",ledger:"📖",itemledger:"📦",stockstatus:"🧮",po:"📝",autopo:"⚙️",gstlogin:"➜",gstr1:"🧾",gstreminder:"🔔",payremind:"₹",einvsand:"📄",einvlive:"📄",ewbsand:"🚚",ewblive:"🚚",backup:"💾",users:"👤",invset:"🔢",apiset:"🔑",urlset:"🔗"};
 const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:false,Other:false};
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
@@ -3039,7 +3039,66 @@ function stockSummary(){
  return `<div class="card"><table><tr><th colspan="3">Current Stock (Opening + Purchase + Sale Return − Sale − Purchase Return ± Adjustment)</th></tr><tr><th>Item</th><th>Unit</th><th>Stock</th></tr>${rows||'<tr><td colspan="3" class="empty">Create an item in Item Master first</td></tr>'}</table></div>`;
 }
 
+function hsnVisibleIds(){
+ const q=($("q")?.value||"").toLowerCase();
+ return (DB.item||[]).filter(r=>!q||M.item.f.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q))).map(r=>r.id);
+}
+function hsnSelectShown(){
+ const ids=hsnVisibleIds();
+ const selected=new Set(RS.hsnSelected||[]);
+ const all=ids.length>0&&ids.every(id=>selected.has(id));
+ ids.forEach(id=>all?selected.delete(id):selected.add(id));
+ RS.hsnSelected=[...selected];render();
+}
+function hsnToggle(id,checked){
+ const selected=new Set(RS.hsnSelected||[]);
+ checked?selected.add(id):selected.delete(id);
+ RS.hsnSelected=[...selected];
+ const e=$("hsnSelCount");if(e)e.textContent=RS.hsnSelected.length+" items selected";
+}
+function bulkApplyHSN(){
+ const ids=(RS.hsnSelected||[]).filter(id=>DB.item.some(x=>x.id===id));
+ const hsn=($("bulkHsnValue")?.value||"").trim();
+ if(!ids.length){alert("पहले Item Master में items select करें।");return}
+ if(!hsn){alert("नया HSN Code डालें।");return}
+ if(!confirm(ids.length+" selected items का HSN Code "+hsn+" करना है?"))return;
+ DB.item=DB.item.map(x=>ids.includes(x.id)?{...x,hsn}:x);
+ RS.hsnSelected=[];save();render();
+ alert(ids.length+" items का HSN Code update हो गया।");
+}
+
+function partyTransferRows(){
+ const from=RS.ptFrom||"",rows=[];
+ if(!from)return rows;
+ ["sale","purchase","salereturn","purchasereturn","receipt","payment","po"].forEach(k=>(DB[k]||[]).forEach(x=>{if(x.party===from)rows.push({key:k+"|"+x.id,k,id:x.id,date:x.date||"",no:vno(x),type:M[k]?.title||k,particular:x.remark||x.itemName||"",amount:+x.amount||(+x.total||0),journalIndex:-1})}));
+ (DB.journal||[]).forEach(x=>jLines(x).forEach((l,i)=>{if(l.acc===from)rows.push({key:"journal|"+x.id+"|"+i,k:"journal",id:x.id,date:x.date||"",no:vno(x),type:"Journal Voucher",particular:x.remark||"Journal account",amount:(+l.dr||0)+(+l.cr||0),journalIndex:i})}));
+ return rows.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+function renderPartyTransfer(){
+ const opts=(sel)=>'<option value="">Select Party</option>'+DB.party.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""))).map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)}</option>`).join("");
+ const rows=partyTransferRows(),selected=new Set(RS.ptSelected||[]);
+ $("ttl").textContent="Party Transfer";$("add").style.display="none";$("q").style.display="none";
+ $("extra").innerHTML=`<div class="card" style="padding:16px;margin:10px 0"><div class="g4"><div><label>From Party</label><select onchange="RS.ptFrom=this.value;RS.ptSelected=[];render()">${opts(RS.ptFrom||"")}</select></div><div><label>To Party</label><select onchange="RS.ptTo=this.value;render()">${opts(RS.ptTo||"")}</select></div><div style="align-self:end"><button onclick="ptSelectAll()">Select All / Clear</button></div><div style="align-self:end"><button style="background:#2456d8" onclick="ptDoTransfer()">Transfer Selected Entries</button></div></div><p style="font-size:12px;color:#64748b;margin:12px 0 0">यहाँ From Party की entries चुनें। Transfer करने पर केवल Party बदलेंगी; Voucher No., Date, Item, GST और Amount जैसे बाकी विवरण वैसे ही रहेंगे।</p></div>`;
+ $("list").innerHTML=`<div style="padding:12px;overflow:auto"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b>From Party की Entries (${rows.length})</b><span>${selected.size} selected</span></div><table><thead><tr><th>Select</th><th>Date</th><th>Voucher Type</th><th>Voucher No.</th><th>Particular</th><th>Amount</th></tr></thead><tbody>${rows.map(r=>`<tr><td><input type="checkbox" ${selected.has(r.key)?"checked":""} onchange="ptToggle('${r.key}',this.checked)"></td><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.no)}</td><td>${esc(r.particular)}</td><td>${inr(r.amount)}</td></tr>`).join("")||'<tr><td colspan="6" class="empty">From Party चुनें। उसकी कोई entry नहीं मिली तो यहाँ दिखाई नहीं देगी।</td></tr>'}</tbody></table></div>`;
+}
+function ptToggle(key,on){const s=new Set(RS.ptSelected||[]);on?s.add(key):s.delete(key);RS.ptSelected=[...s];const e=$("list");if(e)renderPartyTransfer()}
+function ptSelectAll(){const rows=partyTransferRows(),s=new Set(RS.ptSelected||[]);const all=rows.length&&rows.every(r=>s.has(r.key));RS.ptSelected=all?[]:rows.map(r=>r.key);renderPartyTransfer()}
+function ptDoTransfer(){
+ const from=RS.ptFrom,to=RS.ptTo,keys=new Set(RS.ptSelected||[]);
+ if(!from||!to){alert("From Party और To Party दोनों चुनें।");return}
+ if(from===to){alert("From Party और To Party अलग-अलग चुनें।");return}
+ if(!keys.size){alert("कम-से-कम एक entry select करें।");return}
+ if(!confirm(keys.size+" selected entries को चुनी हुई To Party में transfer करना है?"))return;
+ let count=0;
+ keys.forEach(key=>{const a=key.split("|");const k=a[0],id=a[1];if(k==="journal"){
+   const ix=+a[2],x=(DB.journal||[]).find(z=>z.id===id);if(x){if(Array.isArray(x.lines)&&x.lines[ix]&&x.lines[ix].acc===from){x.lines[ix]={...x.lines[ix],acc:to};count++}else if(!Array.isArray(x.lines)){if(ix===0&&x.dr===from){x.dr=to;count++}if(ix===1&&x.cr===from){x.cr=to;count++}}}
+  }else{const x=(DB[k]||[]).find(z=>z.id===id);if(x&&x.party===from){x.party=to;count++}}
+ });
+ RS.ptSelected=[];save();render();alert(count+" entries successfully transferred.");
+}
+
 function render(){
+ if(cur==="partytransfer"){if(authOn()&&!curUser()){showLogin();return}hideLogin();coEnsure();buildNav();renderTop();$("list").className="card";renderPartyTransfer();return}
  if(authOn()&&!curUser()){showLogin();return}
  hideLogin();
  if(!isAdmin()&&NAV_ADMIN.includes(cur))cur="dashboard";
@@ -3073,16 +3132,16 @@ function render(){
  if(VK[cur]&&RS.vf){renderVoucher();return}
  const m=M[cur];
  $("ttl").textContent=m.title;
- $("extra").innerHTML=cur==="stock"?stockSummary():(cur==="party"?`<div class="ctl" style="margin:10px 0"><button onclick="bulkGstinValidate()">✓ Bulk GSTIN Validate &amp; Auto Update</button><span style="font-size:12px;color:#6b7690">GSTIN वाली सभी पार्टियों की जाँच; केवल खाली विवरण भरे जाएँगे.</span></div><div id="gstin_bulk_result"></div>`:"");
+ $("extra").innerHTML=cur==="stock"?stockSummary():(cur==="party"?`<div class="ctl" style="margin:10px 0"><button onclick="bulkGstinValidate()">✓ Bulk GSTIN Validate &amp; Auto Update</button><span style="font-size:12px;color:#6b7690">GSTIN वाली सभी पार्टियों की जाँच; केवल खाली विवरण भरे जाएँगे.</span></div><div id="gstin_bulk_result"></div>`:(cur==="item"?`<div class="ctl" style="margin:10px 0;padding:12px;background:#f5f7ff;border:1px solid #dce3ff;border-radius:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>Bulk HSN Update</b><button type="button" onclick="hsnSelectShown()">Select All / Visible Items</button><span id="hsnSelCount" style="font-size:12px;color:#526078">0 items selected</span><input id="bulkHsnValue" placeholder="Enter new HSN Code" style="max-width:190px"><button type="button" style="background:#2f4fd8" onclick="bulkApplyHSN()">Update HSN in Selected Items</button><small style="width:100%;color:#6b7690">उदाहरण: Printing Plate की सभी items को search करें, Select All करें, HSN डालें और Update दबाएँ।</small></div>`:""));
  const q=$("q").value.toLowerCase();
  const cols=m.f.slice();
  if(cur==="receipt"||cur==="payment")cols.push({k:"alloc",l:"Bills Settled"});
  if(m.tx)cols.push({k:"amount",l:"Amount"});
  let data=DB[cur].filter(r=>cur!=="company"||coAllowed(r.id)).map(r=>cur==="journal"?{...r,accounts:jSum(r)}:r).filter(r=>!q||cols.some(f=>String(val(f,r[f.k])).toLowerCase().includes(q)));
  if(!data.length){$("list").innerHTML='<div class="empty">No records found</div>';return}
- let html="<table><tr><th>#</th>"+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
+ let html="<table><tr><th>#</th>"+(cur==="item"?"<th><input type='checkbox' title='Select visible items' onclick='hsnSelectShown()'></th>":"")+cols.map(f=>`<th>${f.l}</th>`).join("")+"<th>Action</th></tr>";
  data.forEach((r,i)=>{
-  html+=`<tr><td>${i+1}</td>`+cols.map(f=>`<td>${esc(f.k==="alloc"?(r.alloc||[]).map(a=>a.inv).join(", "):val(f,r[f.k]))}</td>`).join("")+
+  html+=`<tr><td>${i+1}</td>`+(cur==="item"?`<td><input type="checkbox" ${((RS.hsnSelected||[]).includes(r.id))?"checked":""} onchange="hsnToggle('${r.id}',this.checked)"></td>`:"")+cols.map(f=>`<td>${esc(f.k==="alloc"?(r.alloc||[]).map(a=>a.inv).join(", "):val(f,r[f.k]))}</td>`).join("")+
   `<td>${cur==="item"?`<button class="e" style="background:#6a4cd9" onclick="itemOf('${r.id}')">Ledger</button> `:""}${cur==="party"?`<button class="e" style="background:#087e8b" ${String(r.gstin||"").trim()?`onclick="validatePartyGstin('${r.id}')"`:"disabled title='पहले GSTIN भरें'"}>✓ Validate GSTIN</button> `:""}<button class="e" onclick="openForm('${r.id}')">Edit</button> <button class="d" onclick="del('${r.id}')">Delete</button></td></tr>`;
  });
  html+="</table>";
