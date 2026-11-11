@@ -1569,11 +1569,12 @@ async function bdbPut(id,blob){try{const d=await bdb();d.transaction("b","readwr
 async function bdbGet(id){try{const d=await bdb();return await new Promise(ok=>{const q=d.transaction("b").objectStore("b").get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)})}catch(e){return null}}
 async function billView(id){const b=await bdbGet(id);if(!b){alert("Bill image is not stored on this device");return}window.open(URL.createObjectURL(b),"_blank")}
 function billCard(){
+ if(aiKey()&&!/^sk-ant-/.test(aiKey())){try{localStorage.removeItem("acc_ai_key")}catch(e){}}
  const f=RS.sf,k=cur,has=aiKey(),st=RS.billMsg||"";
  return `<div class="sc"><div class="sh">📎 Attach Bill (auto-fill)</div><div class="sb" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
  <input type="file" accept="image/*" id="bill_file" style="flex:1;min-width:200px" onchange="billRead(this)" ${has?"":"disabled"}>
  <a class="lnk" onclick="billPaste()">Paste bill data</a>
- <a class="lnk" onclick="billKey()">${has?"Change AI key":"Set AI key first"}</a>
+ <a class="lnk" onclick="billKey()">${has?"Change AI key":"Set AI key (optional)"}</a>${has?` <a class="lnk" onclick="try{localStorage.removeItem('acc_ai_key')}catch(e){}RS.billMsg='';render()">Remove AI key</a>`:""}
  ${f.id&&DB[k].find(x=>x.id===f.id&&x.hasBill)?`<a class="lnk" onclick="billView('${f.id}')">View saved bill</a>`:""}
  </div>${st?`<div class="sb" style="font-size:12px;line-height:1.6;border-top:1px solid #eceff5">${st}</div>`:""}</div>`;
 }
@@ -1626,7 +1627,7 @@ async function billRead(el){
 {"invoice_no":"","date":"YYYY-MM-DD","seller_name":"","seller_gstin":"","buyer_name":"","buyer_gstin":"","buyer_state_code":"","items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"amount":0}],"taxable_total":0,"igst_percent":0,"cgst_percent":0,"sgst_percent":0,"tax_total":0,"grand_total":0}
 Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
   const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:AI_MODEL,max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt_}]}]})});
-  const j=await r.json();if(!r.ok)throw new Error(r.status===401?"API key rejected by Anthropic. Use Change AI key and paste a valid key (sk-ant-...) from console.anthropic.com.":r.status===400&&/credit/i.test((j.error&&j.error.message)||"")?"No API credits. Add credits in console.anthropic.com > Billing.":((j.error&&j.error.message)||("HTTP "+r.status)));
+  const j=await r.json();if(!r.ok)if(r.status===401){try{localStorage.removeItem("acc_ai_key")}catch(e){}}throw new Error(r.status===401?"The saved AI key was rejected, so it has been removed. Use Paste bill data instead, or set a valid Anthropic key (sk-ant-...).":r.status===400&&/credit/i.test((j.error&&j.error.message)||"")?"No API credits. Add credits in console.anthropic.com > Billing.":((j.error&&j.error.message)||("HTTP "+r.status)));
   const txt=(j.content||[]).map(c=>c.text||"").join("").replace(/```json|```/g,"").trim();
   const d=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
   billApply(d,blob);
