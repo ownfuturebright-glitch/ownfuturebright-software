@@ -1508,7 +1508,7 @@ function saleFromRec(x){
  return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:(x.discMode&&+x.invDisc>0)?x.discMode:"post",
   items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
-function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.sf=x?saleFromRec(x):newSaleForm();render()}
+function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.billMsg="";RS.billMiss=[];RS.sf=x?saleFromRec(x):newSaleForm();render()}
 function sfCompute(){
  const f=RS.sf,intra=!!f.pos&&f.pos===stc(comp()),post=f.dmode!=="pre";
  const pre=f.items.map(l=>{const gross=(+l.qty||0)*(+l.rate||0),d=gross*(+l.disc||0)/100;return {d,t0:gross-d}});
@@ -1560,6 +1560,73 @@ function sfBuild(){
   items.push({item:l.item,hsn:l.hsn,unit:l.unit,qty:+l.qty||0,rate:+l.rate||0,disc:+l.disc||0,gst:+l.gst||0,taxable:r2(o.t),cg:r2(o.cg),sg:r2(o.sg),ig:r2(o.ig),total:r2(o.tot)})});
  return {id:f.id,inv:sfFull().trim(),invNo:f.no,date:f.date,party:f.party,gstin:f.gstin,pos:f.pos,remark:f.remark,items,discType:f.dtype,discVal:+f.dval||0,discMode:f.dmode==="pre"?"pre":"post",invDisc:r2(m.idisc),postDisc:r2(m.idPost),subtotal:r2(m.sub),taxable:r2(m.tv),discount:r2(m.dc),cgst:r2(m.cg),sgst:r2(m.sg),igst:r2(m.ig),round:r2(m.round),amount:m.grand};
 }
+/* ===== Attach Bill -> auto-fill entry (AI reads bill photo; user reviews, then saves) ===== */
+const AI_MODEL="claude-sonnet-5-5";
+const aiKey=()=>{try{return localStorage.getItem("acc_ai_key")||""}catch(e){return""}};
+function billKey(){const v=prompt("Enter Anthropic API key (stored only in this browser, not in backup/cloud):",aiKey());if(v===null)return;try{localStorage.setItem("acc_ai_key",v.trim())}catch(e){}render()}
+function bdb(){return new Promise((ok,no)=>{const r=indexedDB.open("acc_bills",1);r.onupgradeneeded=()=>r.result.createObjectStore("b");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
+async function bdbPut(id,blob){try{const d=await bdb();d.transaction("b","readwrite").objectStore("b").put(blob,id)}catch(e){}}
+async function bdbGet(id){try{const d=await bdb();return await new Promise(ok=>{const q=d.transaction("b").objectStore("b").get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)})}catch(e){return null}}
+async function billView(id){const b=await bdbGet(id);if(!b){alert("Bill image is not stored on this device");return}window.open(URL.createObjectURL(b),"_blank")}
+function billCard(){
+ const f=RS.sf,k=cur,has=aiKey(),st=RS.billMsg||"";
+ return `<div class="sc"><div class="sh">📎 Attach Bill (auto-fill)</div><div class="sb" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+ <input type="file" accept="image/*" id="bill_file" style="flex:1;min-width:200px" onchange="billRead(this)" ${has?"":"disabled"}>
+ <a class="lnk" onclick="billKey()">${has?"Change AI key":"Set AI key first"}</a>
+ ${f.id&&DB[k].find(x=>x.id===f.id&&x.hasBill)?`<a class="lnk" onclick="billView('${f.id}')">View saved bill</a>`:""}
+ </div>${st?`<div class="sb" style="font-size:12px;line-height:1.6;border-top:1px solid #eceff5">${st}</div>`:""}</div>`;
+}
+function billShrink(file,max){return new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement("canvas");cv.width=Math.round(im.width*s);cv.height=Math.round(im.height*s);cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);cv.toBlob(b=>ok({blob:b,b64:cv.toDataURL("image/jpeg",0.85).split(",")[1]}),"image/jpeg",0.8)};im.onerror=no;im.src=fr.result};fr.onerror=no;fr.readAsDataURL(file)})}
+const billNorm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+function billScore(a,b){a=billNorm(a);b=billNorm(b);if(!a||!b)return 0;if(a===b)return 1;const A=new Set(a.split(" ")),B=b.split(" ");const hit=B.filter(w=>A.has(w)).length;return hit/Math.max(A.size,B.length)}
+function billMatchItem(desc,hsn){let best=null,bs=0;DB.item.forEach(i=>{let s=Math.max(billScore(i.name,desc),i.code?billScore(i.code,desc):0);if(s>0&&hsn&&i.hsn&&String(i.hsn)===String(hsn))s+=0.1;if(s>bs){bs=s;best=i}});return bs>=0.6?best:null}
+async function billRead(el){
+ const file=el.files&&el.files[0];if(!file||!RS.sf)return;
+ const k=cur,sale=(k==="sale"||k==="salereturn");
+ RS.billMsg="⏳ Reading bill... (10–20 seconds)";render();
+ try{
+  const {blob,b64}=await billShrink(file,1800);
+  const prompt_=`This is a photo of an Indian GST tax invoice (may be rotated/sideways, handwritten entries, pink carbon copy). Read it carefully and return ONLY a JSON object, no other text:
+{"invoice_no":"","date":"YYYY-MM-DD","seller_name":"","seller_gstin":"","buyer_name":"","buyer_gstin":"","buyer_state_code":"","items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"amount":0}],"taxable_total":0,"igst_percent":0,"cgst_percent":0,"sgst_percent":0,"tax_total":0,"grand_total":0}
+Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:AI_MODEL,max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt_}]}]})});
+  const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));
+  const txt=(j.content||[]).map(c=>c.text||"").join("").replace(/```json|```/g,"").trim();
+  const d=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
+  const f=RS.sf,warn=[];
+  const pg=String((sale?d.buyer_gstin:d.seller_gstin)||"").toUpperCase().replace(/\s/g,""),pn=sale?d.buyer_name:d.seller_name;
+  let pt=pg?DB.party.find(p=>String(p.gstin||"").toUpperCase()===pg):null;
+  if(!pt&&pn){let bs=0;DB.party.forEach(p=>{const s=billScore(p.name,pn);if(s>bs){bs=s;pt=p}});if(bs<0.6)pt=null}
+  if(pt){f.party=pt.id;f.gstin=pt.gstin||pg;f.pos=stc(pt)||f.pos}
+  else{f.party="";f.gstin=pg;if(pg.length>=2)f.pos=pg.slice(0,2);warn.push("Party <b>"+esc(pn||"?")+"</b> "+(pg?"(GSTIN "+esc(pg)+") ":"")+"not found in Party Master — add it, then select it.")}
+  if(d.invoice_no){f.no=invAuto(k)?String(d.invoice_no).replace(/\D/g,"")||String(d.invoice_no):String(d.invoice_no)}
+  if(/^\d{4}-\d\d-\d\d$/.test(d.date||""))f.date=d.date;
+  const rate=+(d.igst_percent||0)+(+d.cgst_percent||0)+(+d.sgst_percent||0)||18;
+  const miss=[];
+  f.items=(d.items||[]).filter(x=>x.description||x.qty).map(x=>{
+   const l=blankLine(),it=billMatchItem(x.description,x.hsn);
+   l.qty=String(x.qty||"");l.rate=String(x.rate||"");l.hsn=String(x.hsn||"");l.gst=String(rate);
+   const u=UNITS.find(z=>z.toLowerCase()===String(x.unit||"").toLowerCase().replace(/^kgs?$/,"kg").replace(/^(ltrs?|liters?|litres?)$/,"ltr").replace(/^pc$/,"pcs"));if(u)l.unit=u;
+   if(it){l.item=it.id;l.name=it.name;if(!l.hsn)l.hsn=it.hsn||"";if(!u)l.unit=UNITS.find(z=>z.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos"}
+   else{l.item="";l.name=x.description||"";miss.push({l,x})}
+   return l});
+  if(!f.items.length)f.items=[blankLine()];
+  RS.billMiss=miss;f.billBlob=blob;
+  const m=sfCompute(),gt=+d.grand_total||0;
+  if(gt&&Math.abs(m.grand-gt)>1)warn.push("Total mismatch: bill says <b>₹"+n2(gt)+"</b>, entry computes <b>₹"+n2(m.grand)+"</b>. Check qty/rate/GST on each line.");
+  if(miss.length)warn.push(miss.length+" item(s) not in Item Master: "+miss.map(z=>"<b>"+esc(z.x.description)+"</b>").join(", ")+". <a class=\"lnk\" onclick=\"billMakeItems()\">Create these items automatically</a>");
+  RS.billMsg="✅ Bill read. <b>Check everything below, then Save.</b>"+(warn.length?"<br>⚠ "+warn.join("<br>⚠ "):"");
+ }catch(e){RS.billMsg="❌ Could not read bill: "+esc(e.message||e)}
+ render();
+}
+function billMakeItems(){
+ const f=RS.sf,k=cur,rk=KC[k].rate;
+ (RS.billMiss||[]).forEach(({l,x})=>{
+  const it={id:uid(),name:String(x.description||"Item").trim(),code:"",unit:l.unit,hsn:l.hsn,gst:+l.gst||18,openq:0};it[rk]=+x.rate||0;
+  DB.item.push(it);l.item=it.id;l.name=it.name});
+ RS.billMiss=[];save();RS.billMsg="✅ Items created. <b>Check everything below, then Save.</b>";render();
+}
+
 function saleSave(){
  const f=RS.sf;if(!f)return; if(cur==="sale"&&f.id&&liveIrnLocked("sale",f.id)){alert("Live E-Invoice का IRN बन चुका है। Edit स्क्रीन खुल सकती है, लेकिन Save बंद है।");return} const rec=sfBuild();
  if(!String(f.no).trim()){alert(KC[cur].no+" is required");return}
@@ -1568,7 +1635,10 @@ function saleSave(){
  if(!rec.items.length||rec.items.some(l=>!l.item||l.qty<=0)){alert("Add at least one item. Every row needs an item picked from the list and a quantity.");return}
  if(DB[cur].some(x=>x.id!==f.id&&x.inv===rec.inv&&(KC[cur].own||x.party===rec.party))){alert(KC[cur].no+" "+rec.inv+" already exists");return}
  const isNew=!f.id;
- if(isNew){rec.id=uid();DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]=rec}
+ if(isNew)rec.id=uid();
+ if(f.billBlob){rec.hasBill=true;bdbPut(rec.id,f.billBlob)}else if(!isNew){const o0=DB[cur].find(x=>x.id===f.id);if(o0&&o0.hasBill)rec.hasBill=true}
+ if(isNew){DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]=rec}
+ RS.billMsg="";RS.billMiss=[];
  save();toast(M[cur].title+" "+rec.inv+" saved");
  RS.sf=isNew?newSaleForm():null;if(!isNew&&RS.back){cur=RS.back;RS.back=null}render();
 }
@@ -3001,7 +3071,7 @@ function renderSale(){
   const l=DB[cur].filter(x=>!q||(String(x.inv||"")+" "+lookup("party",x.party)).toLowerCase().includes(q)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
   let tot=0;
   const rows=l.map((x,i)=>{const g=gstCalc(x),t=x.taxable!==undefined?+x.amount:g.tot;tot+=t;
-   const locked=cur==="sale"&&!!x.irn; return [i+1,esc(x.inv||docNo(cur,x)),x.date,esc(lookup("party",x.party)),lines(x).length,n2(g.tv),n2(g.tax),n2(t),`${locked?`<button class="e" disabled title="E-Invoice generated; locked" style="opacity:.45;cursor:not-allowed">🔒 Locked</button>`:`<button class="e" onclick="openSale('${x.id}')">Edit</button> <button class="d" onclick="del('${x.id}')">Delete</button>`} <button class="e" style="background:#8a94a8" onclick="salePrintId('${x.id}')">Print</button>`]});
+   const locked=cur==="sale"&&!!x.irn; return [i+1,esc(x.inv||docNo(cur,x)),x.date,esc(lookup("party",x.party)),lines(x).length,n2(g.tv),n2(g.tax),n2(t),`${locked?`<button class="e" disabled title="E-Invoice generated; locked" style="opacity:.45;cursor:not-allowed">🔒 Locked</button>`:`<button class="e" onclick="openSale('${x.id}')">Edit</button> <button class="d" onclick="del('${x.id}')">Delete</button>`} <button class="e" style="background:#8a94a8" onclick="salePrintId('${x.id}')">Print</button>${x.hasBill?` <button class="e" style="background:#6b7690" onclick="billView('${x.id}')">Bill</button>`:""}`]});
   $("list").innerHTML=tbl(["#",K.no.replace(".",""),"Date",K.pl.replace(" Name",""),"Items","Taxable","GST","Total","Action"],rows,`Invoices: ${l.length} &nbsp; Total: ₹ ${n2(tot)}`);
   return;
  }
@@ -3009,7 +3079,7 @@ function renderSale(){
  $("add").style.display="";$("add").textContent=RS.back?"← Back":"← Back to List";$("q").style.display="none";$("list").className="";
  $("extra").innerHTML=`<div style="font-size:12px;color:#6b7690;margin:-8px 0 10px">FY ${fyl(RS.fy)} • ${esc(stName(stc(c))||c.city||"-")}</div>`;
  const R0=v=>"₹"+n2(v);
- $("list").innerHTML=`<div class="sc"><div class="hd2"><div class="hico">🧾</div><div style="flex:1"><b style="font-size:17px">${K.head}</b><div style="font-size:11px;color:#6b7690;margin-top:2px">${esc(c.name||"No company selected")} • GSTIN: ${esc(c.gstin||"-")}</div></div><span class="bdg ${m.intra?"a":"w"}">${m.intra?"INTRA-STATE":"INTER-STATE"}</span></div>
+ $("list").innerHTML=billCard()+`<div class="sc"><div class="hd2"><div class="hico">🧾</div><div style="flex:1"><b style="font-size:17px">${K.head}</b><div style="font-size:11px;color:#6b7690;margin-top:2px">${esc(c.name||"No company selected")} • GSTIN: ${esc(c.gstin||"-")}</div></div><span class="bdg ${m.intra?"a":"w"}">${m.intra?"INTRA-STATE":"INTER-STATE"}</span></div>
  <div class="sb g4" style="border-top:1px solid #eceff5"><div><label>${K.no} *</label><input value="${esc(f.no)}" oninput="sfSet('no',this.value)"></div><div><label>Date *</label><input type="date" value="${esc(f.date)}" onchange="sfSet('date',this.value)"></div><div><label>Full Number Preview</label><input class="ro" id="sf_full" readonly value="${esc(sfFull())}"></div><div><label>${K.type}</label><input class="ro" readonly value="${m.intra?K.local:K.inter}"></div></div></div>
  <div class="sc"><div class="sh">Party Details</div><div class="sb g4"><div><div style="display:flex;justify-content:space-between;align-items:baseline"><label>${K.pl} *</label><a class="lnk" onclick="sfNewParty()">+ Add New ${K.pl.replace(" Name","")}</a></div><select onchange="sfParty(this.value)"><option value="">Select ${K.pl.replace(" Name","").toLowerCase()}</option>${DB.party.filter(K.f).map(p=>`<option value="${p.id}" ${p.id===f.party?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div><div><label>GSTIN</label><input value="${esc(f.gstin)}" oninput="sfSet('gstin',this.value.toUpperCase())"></div><div><label>${K.pos}</label><select onchange="sfSet('pos',this.value);render()">${f.pos&&!stName(f.pos)?`<option value="${esc(f.pos)}" selected>${esc(f.pos)}</option>`:""}${STATES.map(z=>`<option value="${z[0]}" ${z[0]===f.pos?"selected":""}>${z[1]}</option>`).join("")}</select></div><div><label>Tax Type</label><input class="ro" readonly value="${m.intra?"CGST + SGST":"IGST"}"></div></div></div>
  <div class="sc"><div class="sh" style="display:flex;justify-content:space-between;align-items:center"><span>Item Details</span><a class="lnk" onclick="sfNewItem()">+ Add New Item</a></div><div style="overflow-x:auto"><table class="it"><tr><th>#</th><th>ITEM</th><th>HSN</th><th>UNIT</th><th>QTY</th><th>RATE</th><th>DISC %</th><th>TAXABLE</th><th>GST %</th>${m.intra?"<th>CGST</th><th>SGST</th>":"<th>IGST</th>"}<th>TOTAL</th><th></th></tr>${f.items.map((l,i)=>sfRowHtml(l,i,m)).join("")}</table></div><div class="sb"><a class="lnk" onclick="sfAdd()">+ Add another item</a></div></div>
