@@ -916,7 +916,7 @@ function edocBuild(kind){
  const g=gstCalc(x),sg=RS.sbx?sbxFor(g.c):"",sb=RS.sbx?(apiCfg().sbuyer||""):"";
  const c=sg?{...g.c,gstin:sg}:g.c,pt=sb?{...g.pt,gstin:sb,stcode:sb.slice(0,2)}:g.pt,no=docNo("sale",x),iss=[],need=(v,m)=>{if(!v)iss.push(m)};
  const pos=sb?sb.slice(0,2):(g.pos||stc(pt)),intra=!!pos&&pos===stc(c),sp=v=>({cg:intra?v/2:0,sg:intra?v/2:0,ig:intra?0:v});
- const SA=adr(c.address,c.address2),BA=adr(pt.addr,pt.addr2);need(SA.a1,"Company Address 1 (Company Master)");need(BA.a1,"Party Address 1 (Party Master)");need(c.gstin,"Company GSTIN (Company Master)");need(c.pin,"Company Pin Code");need(stc(c),"Company State Code");
+ const SA=adr(c.address,c.address2),BA=adr(pt.addr,pt.addr2);const VH=String(RS.ew.veh||pt.vehicle||"").replace(/[\s-]/g,"").toUpperCase();need(SA.a1,"Company Address 1 (Company Master)");need(BA.a1,"Party Address 1 (Party Master)");need(c.gstin,"Company GSTIN (Company Master)");need(c.pin,"Company Pin Code");need(stc(c),"Company State Code");
  if(kind==="einv")need(pt.gstin,"Party GSTIN (required for e-invoice B2B)");
  need(pt.pin,"Party Pin Code");need(stc(pt),"Party State Code");
  const pin=v=>+String(v||"").replace(/\D/g,"")||0;
@@ -932,9 +932,9 @@ function edocBuild(kind){
   ValDtls:{AssVal:r2(g.tv),CgstVal:r2(T.cg),SgstVal:r2(T.sg),IgstVal:r2(T.ig),Discount:r2(dsc),RndOffAmt:r2(rnd),TotInvVal:inv}};
   if(RS.ew.einvEwb){
    const E=RS.ew;
-   j.EwbDtls={TransId:E.tid||"",TransName:E.tname||"",TransMode:String(E.transMode||"1"),Distance:+E.dist||0,TransDocNo:E.transDocNo||"",TransDocDt:E.transDocDt?fd(E.transDocDt):"",VehNo:E.veh||"",VehType:E.vehType||"R"};
+   j.EwbDtls={TransId:E.tid||"",TransName:E.tname||"",TransMode:String(E.transMode||"1"),Distance:+E.dist||0,TransDocNo:E.transDocNo||"",TransDocDt:E.transDocDt?fd(E.transDocDt):"",VehNo:VH,VehType:E.vehType||"R"};
    if(!E.dist||+E.dist<=0)need(true,"E-Way Bill Distance (km) must be greater than zero");
-   if(!E.veh&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
+   if(!VH&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
   }
  }
  else{const E=RS.ew,dt=String(x.date||"").replace(/-/g,""),yr=+dt.slice(0,4)||0,mo=+dt.slice(4,6)||0,sc=String(stc(c)).padStart(2,"0"),rc=String(pos||stc(pt)).padStart(2,"0");
@@ -942,7 +942,7 @@ function edocBuild(kind){
    SupGSTIN:c.gstin||"",SupName:c.name||"",SupAdd1:SA.a1||"",SupAdd2:SA.a2||"",SupCity:c.city||stName(stc(c)),SupState:sc,SupPincode:String(pin(c.pin)),
    RecGSTIN:pt.gstin||"URP",RecName:pt.name||"",RecAdd1:BA.a1||"",RecAdd2:BA.a2||"",Reccity:pt.city||stName(stc(pt)),RecState:rc,Recpincode:String(pin(pt.pin)),
    TransMode:String(E.transMode||"1"),TransporterId:E.tid||"",TransporterName:E.tname||"",TransDistance:String(E.dist||"0"),TransDocNo:E.transDocNo||"",TransDocDate:E.transDocDt?fd(E.transDocDt):"",
-   VehicleType:E.vehType||"R",VehicleNo:E.veh||"",
+   VehicleType:E.vehType||"R",VehicleNo:VH,
    ProductName:o.it.name||"",ProductDesc:o.it.name||"",HSNCode:String(o.hsn||""),Quantity:o.q,QtyUnit:o.u,
    TaxableValue:r2(o.l.t),TotalValue:r2(g.tv),
    SGSTRate:intra?o.l.r/2:0,SGSTValue:r2(o.s.sg),CGSTRate:intra?o.l.r/2:0,CGSTValue:r2(o.s.cg),IGSTRate:intra?0:o.l.r,IGSTValue:r2(o.s.ig),
@@ -950,7 +950,7 @@ function edocBuild(kind){
    EWBUserName:"",EWBPassword:"",CessNonAdvol:0,SubSupplyDesc:"",ShipFromStateCode:sc,ShipToStateCode:rc,TotalInvoiceValue:String(inv),CessNonAdvolValue:0,OtherValue:r2(rnd-pd),dispatchFromGSTIN:c.gstin||"",dispatchFromTradeName:c.name||"",ShipToGSTIN:pt.gstin||"URP",ShipToTradeName:pt.name||"",IsBillFromShipFromSame:"1",IsBillToShipToSame:"1",IsGSTINSEZ:0})),
    Year:yr,Month:mo};
   if(!E.dist||+E.dist<=0)iss.push("Note: Distance is 0 - the portal will auto-calculate it (enter km if you get an error)");
-  if(!E.veh&&!E.tid)iss.push("Enter Vehicle No. or Transporter ID for the E-Way Bill");
+  if(!VH&&!E.tid)iss.push("Enter Vehicle No. or Transporter ID for the E-Way Bill");
   if(inv<=50000)iss.push("Note: the invoice value is below ₹50,000, so an e-way bill is usually not required (please verify the rules)")}
  return {j,iss,no};
 }
