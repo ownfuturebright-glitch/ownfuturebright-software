@@ -472,7 +472,7 @@ function reportPeriodControls(){
  const months=names.map((name,i)=>`<option value="${i+1}" ${+(RS.periodMonth||4)===i+1?"selected":""}>${name}</option>`).join("");
  const fys=Array.from({length:8},(_,i)=>FY0+2-i).map(y=>`<option value="${y}" ${y===fy?"selected":""}>${fyl(y)}</option>`).join("");
  const r=reportPeriodRange();
- return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?(/^(sale|purchase|salereturn|purchasereturn)register$/.test(cur)?`<div><label>Date</label><input type="date" value="${RS.periodFrom&&RS.periodFrom===RS.periodTo?RS.periodFrom:""}" onchange="setDt1(this.value)"></div>`:`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`):""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
+ return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?(/^(sale|purchase|salereturn|purchasereturn|receipt|payment|journal)register$|^(cash|bank)book$/.test(cur)?`<div><label>Date</label><input type="date" value="${RS.periodFrom&&RS.periodFrom===RS.periodTo?RS.periodFrom:""}" onchange="setDt1(this.value)"></div>`:`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`):""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
 }
 function bookPeriodRange(){return reportPeriodRange()}
 function bookPeriodControls(){return reportPeriodControls()}
@@ -586,7 +586,7 @@ function cbBook(kind){
  all.sort(byDate);let b=0;all.forEach(r=>{b+=r.dr-r.cr;r.bal=b});
  const l=all.filter(r=>rfPass(key,r));let ti=0,to=0;
  const rows=l.map((r,i)=>{ti+=r.dr;to+=r.cr;return [i+1,fd(r.date),esc(r.type),`<b>${esc(r.no)}</b>`,pCell(r),n2(r.dr),n2(r.cr),dc(r.bal),act(r.k,r.id)]});
- return rfBar(key,{types:[["receipt","Receipt"],["payment","Payment"],["journal","Journal"]],period:1,drL:"Debit (In)",crL:"Credit (Out)"})+
+ return rfBar(key,{types:[["receipt","Receipt"],["payment","Payment"],["journal","Journal"]],period:1,oneDate:1,drL:"Debit (In)",crL:"Credit (Out)"})+
   tbl(["#","Date","Voucher Type","Voucher No.","Party / Particulars","Debit (In)","Credit (Out)","Balance","Action"],rows,
   `Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Debit (In): ₹ ${n2(ti)} &nbsp; Credit (Out): ₹ ${n2(to)} &nbsp; ${bank?"Bank":"Cash"} Balance: ₹ ${dc(b)}`);
 }
@@ -700,7 +700,7 @@ Object.keys(REG).forEach(rk=>{const mk=REG[rk];
    const j=mk==="journal";
    const pt=j?(r.cra?"Cr: "+r.cra:"")+(r.part?(r.cra?" | ":"")+r.part:""):r.part;
    return [i+1,fd(r.date),`<b>${esc(r.no)}</b>`,esc(j?(r.dra||"-"):r.party),esc(pt||"-"),n2(r.dr),n2(r.cr),act(mk,r.id)]});
-  return rfBar(rk,{period:1})+tbl(["#","Date","Voucher No.","Party / Debit A/c","Particulars / Credit A/c","Debit (₹)","Credit (₹)","Action"],rows,
+  return rfBar(rk,{period:1,oneDate:1})+tbl(["#","Date","Voucher No.","Party / Debit A/c","Particulars / Credit A/c","Debit (₹)","Credit (₹)","Action"],rows,
    `Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Total Debit: ₹ ${n2(td)} &nbsp; Total Credit: ₹ ${n2(tc)}`);
  }}});
 R.journalbook=R.journalregister;
