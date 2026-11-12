@@ -257,6 +257,10 @@ main{min-width:0;width:calc(100% - 230px)}
  .cloudbox{padding:20px}
 }
 @media(hover:none){button,.gb a,.gh,.top1,.qt{min-height:42px}}
+.rtabs{display:flex;gap:6px;background:#eef0f6;border-radius:12px;padding:8px;margin:0 0 10px;overflow-x:auto}
+.rtabs button{flex:1 1 auto;border:0;background:transparent;color:#3a4560;font-weight:600;font-size:13px;padding:10px 14px;border-radius:10px;cursor:pointer;text-align:center;line-height:1.25;min-width:90px}
+.rtabs button:hover{background:#e1e5f0}
+.rtabs button.on{background:#2f56d9;color:#fff;box-shadow:0 2px 6px #2f56d955}
 </style>
 </head>
 <body>
@@ -374,11 +378,17 @@ const _d=new Date(),FY0=_d.getMonth()>=3?_d.getFullYear():_d.getFullYear()-1;
 const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:"",bookFY:FY0,bookPeriod:"Month",bookMonth:String(new Date().getMonth()+1),periodType:"Month",periodMonth:String(new Date().getMonth()+1),periodFY:FY0,periodFrom:FY0+"-04-01",periodTo:(FY0+1)+"-03-31"};
 const fyl=y=>y+"-"+String(y+1).slice(2);
 const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
-const TG=["saleregister","purchaseregister","receiptregister","recv","pay"];
+const TG=["saleregister","purchaseregister","receiptregister","paymentregister","recv","pay"];
+const REGTABS=[["daybook","All Vouchers"],["saleregister","Sale Register"],["purchaseregister","Purchase Register"],["salereturnregister","Sale Return Register"],["purchasereturnregister","Purchase Return Register"],["receiptregister","Receipt Register"],["paymentregister","Payment Register"]];
+function regTabsHtml(){
+ if(!REGTABS.some(t=>t[0]===cur))return "";
+ return `<div class="rtabs">${REGTABS.map(([k,l])=>`<button type="button" class="${k===cur?"on":""}" onclick="regTab('${k}')">${l}</button>`).join("")}</div>`;
+}
+function regTab(k){RS.back=null;cur=k;render()}
 function dashGo(i){
  const k=TG[i];
  if(k!=="recv"&&k!=="pay"){RS.from=RS.fy+"-04-01";RS.to=(RS.fy+1)+"-03-31";RS.periodType="Financial Year";RS.periodFY=RS.fy;RS.periodFrom="";RS.periodTo=""}
- RS.back=null;if(RS.regf)delete RS.regf[k];if(RS.rf)delete RS.rf[k];cur=k;render();
+ RS.back=null;RS.regTabs=(k!=="recv"&&k!=="pay");if(RS.regf)delete RS.regf[k];if(RS.rf)delete RS.rf[k];cur=k;render();
 }
 function itemOf(id){RS.item=id;RS.back=null;if(RS.rf)delete RS.rf.itemledger;cur="itemledger";render()}
 function ledgerOf(id){RS.party=id;RS.from="";RS.to="";if(RS.rf)delete RS.rf.ledger;cur="ledger";render()}
@@ -598,7 +608,7 @@ const R={
   const L=fyl(RS.fy),mv=Array(12).fill(0),nm=["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
   DB.sale.filter(inF).forEach(x=>mv[(parseInt(x.date.slice(5,7))+8)%12]+=sv(x));
   const mx=Math.max(...mv,1);
-  const K=[["Total Sales",fy("sale"),"FY "+L,"₹","#e8edff","#3d5afe"],["Total Purchase",fy("purchase"),"FY "+L,"₹","#fff0d9","#e08a00"],["Total Receipt",fy("receipt"),"FY "+L,"₹","#efe9ff","#6a4cd9"],["Amount Receivable",rc,"Closing Dr","₹","#e1f6ea","#14803c"],["Payable",pb,"Closing Cr","₹","#ffe6e6","#e53935"]];
+  const K=[["Total Sales",fy("sale"),"FY "+L,"₹","#e8edff","#3d5afe"],["Total Purchase",fy("purchase"),"FY "+L,"₹","#fff0d9","#e08a00"],["Total Receipt",fy("receipt"),"FY "+L,"₹","#efe9ff","#6a4cd9"],["Total Payment",fy("payment"),"FY "+L,"₹","#ffe9f0","#d81b60"],["Amount Receivable",rc,"Closing Dr","₹","#e1f6ea","#14803c"],["Payable",pb,"Closing Cr","₹","#ffe6e6","#e53935"]];
   const Q=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","party","item"];
   return `<div class="kpis">${K.map((k,i)=>`<div class="kp" onclick="dashGo(${i})" title="Click to see all transactions"><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
   <div class="dash2"><div class="pan"><b>Sales Overview</b><small>FY ${L} • Monthly sale value</small><div class="chart">${mv.map((v,i)=>`<div class="bc"><div class="bar2 ${v?"":"z"}" style="height:${v?Math.max(6,v/mx*88):3}%" title="${nm[i]}: ${inr(v)}"></div>${nm[i]}</div>`).join("")}</div><div class="fys">FY Sales: <b>${inr(fy("sale"))}</b></div></div>
@@ -1680,8 +1690,25 @@ async function billReadFile(file){
 This is usually a pre-printed carbon-copy invoice where the buyer, items, quantities, rates, amounts and totals are handwritten in pen; ignore ink stamps and signatures. Use the arithmetic to resolve unclear digits: qty x rate = amount, the amounts add up to the taxable total, and IGST (or CGST+SGST) = 18% of it unless the bill shows another rate. Rules: dates are DD-MM-YYYY on Indian bills; convert to YYYY-MM-DD. Use numbers (not strings) for qty/rate/amount. unit like Kg, Ltr, Pcs, Nos. If a value is unreadable, use "" or 0 — never guess. GSTIN is 15 characters.`;
   const key=aiKey(),gem=!/^sk-ant-/.test(key);let txt="";
   if(gem){
-   const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent?key="+encodeURIComponent(key),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt_},{inline_data:{mime_type:"image/jpeg",data:b64}}]}],generationConfig:{temperature:0,responseMimeType:"application/json"}})});
-   const j=await r.json();if(!r.ok){const em=(j.error&&j.error.message)||("HTTP "+r.status);if(/api key|permission|unauthenticated/i.test(em)){try{localStorage.removeItem("acc_ai_key")}catch(e){}throw new Error("Gemini key was rejected, so it has been removed. Create a key at aistudio.google.com and set it again.")}if(r.status===429)throw new Error("Free limit reached for now. Wait a minute and try again, or use Paste bill data.");throw new Error(em)}
+   const models=[GEMINI_MODEL,"gemini-2.5-flash","gemini-2.0-flash","gemini-flash-lite-latest"].filter((m,i,A)=>A.indexOf(m)===i);
+   const body=JSON.stringify({contents:[{parts:[{text:prompt_},{inline_data:{mime_type:"image/jpeg",data:b64}}]}],generationConfig:{temperature:0,responseMimeType:"application/json"}});
+   const busy=(st,em)=>st===500||st===503||st===504||/high demand|overloaded|unavailable|try again later/i.test(em||"");
+   let j=null,limited=false,tries=0;
+   for(let mi=0;mi<models.length&&!j;mi++){
+    for(let at=0;at<2&&!j;at++){
+     if(tries++){RS.billMsg="⏳ Google AI server is busy, trying again... ("+(tries-1)+")";render();await new Promise(z=>setTimeout(z,at?3000:1000))}
+     let r,x;
+     try{r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+models[mi]+":generateContent?key="+encodeURIComponent(key),{method:"POST",headers:{"content-type":"application/json"},body});x=await r.json()}catch(e){continue}
+     if(r.ok){j=x;break}
+     const em=(x.error&&x.error.message)||("HTTP "+r.status);
+     if(/api key|permission|unauthenticated/i.test(em)){try{localStorage.removeItem("acc_ai_key")}catch(e){}throw new Error("Gemini key was rejected, so it has been removed. Create a key at aistudio.google.com and set it again.")}
+     if(r.status===429){limited=true;break}
+     if(r.status===404)break;
+     if(busy(r.status,em))continue;
+     throw new Error(em);
+    }
+   }
+   if(!j)throw new Error(limited?"Free limit reached for now. Wait a minute and try again, or use Paste bill data.":"Google's free AI server is busy right now (high demand). This is temporary: wait 1-2 minutes and attach the bill again, or use Paste bill data.");
    txt=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(x=>x.text||"").join("").replace(/```json|```/g,"").trim();
   }else{
    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:AI_MODEL,max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt_}]}]})});
@@ -3227,7 +3254,7 @@ function buildNav(){
  $("nav").innerHTML="<h2>📒 Accounts</h2>"+`<a class="top1 ${cur==="dashboard"?"on":""}" data-k="dashboard"><span>▦</span>Dashboard</a>`+GROUPS.map(([g,ic,ks0])=>{const ks=ks0.filter(navOk);return !ks.length?"":`<div class="grp ${OPEN[g]?"":"shut"}"><div class="gh" data-g="${g}"><span>${ic}</span>${g}<span class="ar">⌃</span></div><div class="gb">`+ks.map(it).join("")+"</div></div>"}).join("");
  $("nav").querySelectorAll(".gh").forEach(h=>h.onclick=()=>{OPEN[h.dataset.g]=!OPEN[h.dataset.g];buildNav()});
  $("nav").querySelectorAll("a[data-p]").forEach(a=>a.onclick=()=>{OPEN[a.dataset.p]=!OPEN[a.dataset.p];buildNav()});
- $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.back=null;RS.vf=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
+ $("nav").querySelectorAll("a[data-k]").forEach(a=>a.onclick=()=>{RS.regTabs=false;RS.back=null;RS.vf=null;if(KC[a.dataset.k])RS.sf=null;cur=a.dataset.k;$("q").value="";render()});
 }
 
 function stockSummary(){
@@ -3325,7 +3352,7 @@ function render(){
     dateKeys.forEach(k=>{saved[k]=DB[k];DB[k]=(DB[k]||[]).filter(x=>!x.date||(x.date>=range.from&&x.date<=range.to));});
     try { return R[cur].f(); } finally { dateKeys.forEach(k=>{if(saved[k])DB[k]=saved[k];}); }
    })();
-   $("list").innerHTML=(cur==="dashboard"||NOPERIOD.includes(cur)?"":reportPeriodControls())+reportHtml;
+   $("list").innerHTML=(RS.regTabs?regTabsHtml():"")+(cur==="dashboard"||NOPERIOD.includes(cur)?"":reportPeriodControls())+reportHtml;
    $("extra").innerHTML=reportExportButtons();
   }
   return}
