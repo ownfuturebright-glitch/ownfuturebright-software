@@ -301,10 +301,14 @@ const ICON={partytransfer:"🔁",company:"🏢",party:"👥",item:"📦",stock:"
 const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:false,Other:false};
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
+const HSN_MAP={"3215":"32159090","8443":"84431200","32151990":"32159090","9988":"998881","3955":"998881"};
+function hsnFix(v){const t=String(v==null?"":v).trim();return Object.prototype.hasOwnProperty.call(HSN_MAP,t)?HSN_MAP[t]:v}
+function hsnFixAll(){try{(DB.item||[]).forEach(i=>{if(i.hsn)i.hsn=hsnFix(i.hsn)});["sale","purchase","salereturn","purchasereturn"].forEach(k=>(DB[k]||[]).forEach(x=>{if(Array.isArray(x.items))x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn)})}))}catch(e){}}
 let DB={};
 try{DB=JSON.parse(localStorage.getItem("acc_db")||"{}")}catch(e){DB={}}
 Object.keys(M).forEach(k=>DB[k]=DB[k]||[]);
-const save=()=>{try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}bkAuto();cloudQueue()};
+hsnFixAll();
+const save=()=>{hsnFixAll();try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}bkAuto();cloudQueue()};
 /* ===== Supabase central database ===== */
 const CLOUD_URL="https://kgkvyusqnrdgdfzgunvq.supabase.co";
 const CLOUD_KEY="sb_publishable_hHo5LfAoIDXKcSp1_5pHKg_JPvJgkGX";
@@ -792,7 +796,7 @@ function gstr1Build(){
   else if(cr&&!reg&&big)CDNUR.push({typ:"B2CL",ntty:"C",nt_num:no,nt_dt:dt(x.date),val:r2(g.tot),pos,itms:itms(g,0)});
   else g.lines.forEach(l=>{const ty=g.intra?"INTRA":"INTER",key=ty+"|"+pos+"|"+l.r,a=B2CS[key]=B2CS[key]||{sply_ty:ty,rt:+l.r,typ:"OE",pos,txval:0,iamt:0,camt:0,samt:0,csamt:0};
    a.txval+=sg*l.t;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
-  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=String(l.hsn||it.hsn||"").trim(),u=UQC[l.unit||it.unit]||"OTH";if(!h)noHsn++;
+  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=String(hsnFix(l.hsn||it.hsn||"")).trim(),u=UQC[l.unit||it.unit]||"OTH";if(!h)noHsn++;
    const key=h+"|"+l.r+"|"+u,a=HSN[key]=HSN[key]||{hsn_sc:h,desc:String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:+l.r,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
    a.qty+=sg*(+l.qty||0);a.txval+=sg*l.t;a.val+=sg*(l.t+l.tx);if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
  });
@@ -1556,7 +1560,7 @@ function gateHtml(){
 /* ===== Sale Entry (invoice form) ===== */
 const STATES=("01:Jammu & Kashmir|02:Himachal Pradesh|03:Punjab|04:Chandigarh|05:Uttarakhand|06:Haryana|07:Delhi|08:Rajasthan|09:Uttar Pradesh|10:Bihar|11:Sikkim|12:Arunachal Pradesh|13:Nagaland|14:Manipur|15:Mizoram|16:Tripura|17:Meghalaya|18:Assam|19:West Bengal|20:Jharkhand|21:Odisha|22:Chhattisgarh|23:Madhya Pradesh|24:Gujarat|26:Dadra & Nagar Haveli and Daman & Diu|27:Maharashtra|29:Karnataka|30:Goa|31:Lakshadweep|32:Kerala|33:Tamil Nadu|34:Puducherry|35:Andaman & Nicobar Islands|36:Telangana|37:Andhra Pradesh|38:Ladakh|97:Other Territory").split("|").map(x=>x.split(":"));
 const stName=c=>(STATES.find(z=>z[0]===String(c||"").padStart(2,"0"))||["",""])[1];
-const lines=x=>Array.isArray(x.items)?x.items:[{item:x.item,hsn:"",unit:"",qty:x.qty,rate:x.rate,disc:0,gst:(DB.item.find(i=>i.id===x.item)||{}).gst,taxable:+x.amount||0}];
+const lines=x=>Array.isArray(x.items)?(x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn)}),x.items):[{item:x.item,hsn:"",unit:"",qty:x.qty,rate:x.rate,disc:0,gst:(DB.item.find(i=>i.id===x.item)||{}).gst,taxable:+x.amount||0}];
 const sv=x=>x.taxable!==undefined?+x.taxable||0:+x.amount||0;
 const lineSum=x=>lines(x).map(l=>lookup("item",l.item)+" × "+l.qty).join(", ");
 const KC={
@@ -1574,7 +1578,7 @@ function saleFromRec(x){
  if(!x.invNo&&invAuto(cur)){const d=invSaved(cur);if(no.startsWith(d.prefix)&&no.endsWith(d.suffix)&&no.length>=d.prefix.length+d.suffix.length)no=no.slice(d.prefix.length,no.length-d.suffix.length)}
  if(!no&&invAuto(cur))no=invNextNum(cur);
  return {kind:cur,id:x.id,no,date:x.date,party:x.party,gstin:x.gstin!==undefined?x.gstin:(pt.gstin||""),pos:x.pos||stc(pt)||stc(comp()),remark:x.remark||"",dtype:x.discType||"pct",dval:x.discVal!==undefined?String(x.discVal):"",dmode:(x.discMode&&+x.invDisc>0)?x.discMode:"post",
-  items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:l.hsn||it.hsn||"",unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
+  items:lines(x).map(l=>{const it=DB.item.find(i=>i.id===l.item)||{};return {item:l.item,name:it.name||"",hsn:String(hsnFix(l.hsn||it.hsn||"")),unit:l.unit||"Nos",qty:l.qty,rate:l.rate,disc:l.disc||"",gst:String(l.gst??it.gst??18)}})};
 }
 function openSale(id){const x=id&&DB[cur].find(s=>s.id===id);RS.billMsg="";RS.billMiss=[];RS.sf=x?saleFromRec(x):newSaleForm();render()}
 function sfCompute(){
@@ -1602,7 +1606,7 @@ function sfRow(i,k,v){RS.sf.items[i][k]=v;sfUpd()}
 function sfPick(i,name,io){
  const l=RS.sf.items[i],n=String(name).trim().toLowerCase(),it=io||DB.item.find(z=>z.name.toLowerCase()===n||(z.code&&z.code.toLowerCase()===n));
  l.name=name;
- if(it){l.item=it.id;l.name=it.name;l.hsn=it.hsn||"";l.unit=UNITS.find(u=>u.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos";l.rate=it[KC[cur].rate]||"";l.gst=(it.gst!==undefined&&it.gst!=="")?String(it.gst):"18"}
+ if(it){l.item=it.id;l.name=it.name;l.hsn=String(hsnFix(it.hsn||""));l.unit=UNITS.find(u=>u.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos";l.rate=it[KC[cur].rate]||"";l.gst=(it.gst!==undefined&&it.gst!=="")?String(it.gst):"18"}
  else l.item="";
  render();
 }
@@ -1664,9 +1668,9 @@ function billApply(d,blob){
   const miss=[];
   f.items=(d.items||[]).filter(x=>x.description||x.qty).map(x=>{
    const l=blankLine(),it=billMatchItem(x.description,x.hsn);
-   l.qty=String(x.qty||"");l.rate=String(x.rate||"");l.hsn=String(x.hsn||"");l.gst=String(rate);
+   l.qty=String(x.qty||"");l.rate=String(x.rate||"");l.hsn=String(hsnFix(x.hsn||""));l.gst=String(rate);
    const u=UNITS.find(z=>z.toLowerCase()===String(x.unit||"").toLowerCase().replace(/^kgs?$/,"kg").replace(/^(ltrs?|liters?|litres?)$/,"ltr").replace(/^pc$/,"pcs"));if(u)l.unit=u;
-   if(it){l.item=it.id;l.name=it.name;if(!l.hsn)l.hsn=it.hsn||"";if(!u)l.unit=UNITS.find(z=>z.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos"}
+   if(it){l.item=it.id;l.name=it.name;if(!l.hsn)l.hsn=String(hsnFix(it.hsn||""));if(!u)l.unit=UNITS.find(z=>z.toLowerCase()===String(it.unit||"").toLowerCase())||"Nos"}
    else{l.item="";l.name=x.description||"";miss.push({l,x})}
    return l});
   if(!f.items.length)f.items=[blankLine()];
