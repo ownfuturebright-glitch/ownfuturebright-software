@@ -288,7 +288,7 @@ const M={
  party:{title:"Party Master",f:[{k:"name",l:"Party Name",r:1},{k:"type",l:"Type",opts:["Customer","Supplier","Both"]},{k:"cash",l:"Cash Party (not shown in Outstanding)",opts:["No","Yes"]},{k:"phone",l:"Phone"},{k:"vehicle",l:"Vehicle Number"},{k:"city",l:"City"},{k:"gstin",l:"GSTIN"},{k:"addr",l:"Address 1"},{k:"addr2",l:"Address 2"},{k:"pin",l:"Pin Code"},{k:"stcode",l:"State Code (e.g. 07)"},{k:"opening",l:"Opening Balance (Dr +ve / Cr -ve)",t:"number"}]},
  item:{title:"Item Master",f:[{k:"name",l:"Item Name",r:1},{k:"code",l:"Item Code"},{k:"unit",l:"Unit",opts:UNITS},{k:"srate",l:"Sale Rate",t:"number"},{k:"prate",l:"Purchase Rate",t:"number"},{k:"openq",l:"Opening Stock Qty",t:"number"},{k:"minq",l:"Low Stock Limit (Qty, blank = 10)",t:"number"},{k:"roq",l:"Reorder Qty (Auto PO)",t:"number"},{k:"supp",l:"Default Supplier (Auto PO)",src:"party"},{k:"hsn",l:"HSN Code"},{k:"gst",l:"GST %",t:"number"}]},
  stock:{title:"Stocks (Adjustment)",f:[{k:"date",l:"Date",t:"date",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"type",l:"Type",opts:["In","Out"],r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"remark",l:"Remark"}]},
- sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Sale Return"), purchasereturn:tx("Purchase Return"),
+ sale:tx("Sale Entry"), purchase:tx("Purchase Entry"), salereturn:tx("Credit Note (Sale Return)"), purchasereturn:tx("Debit Note (Purchase Return)"),
  po:{title:"Purchase Order",tx:1,f:[{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Supplier",src:"party",r:1},{k:"item",l:"Item",src:"item",r:1},{k:"qty",l:"Qty",t:"number",r:1},{k:"rate",l:"Rate",t:"number",r:1},{k:"status",l:"Status",opts:["Pending","Received","Cancelled"]},{k:"remark",l:"Remark"}]},
  receipt:{title:"Receipt Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Received From Party",src:"party",r:1},{k:"account",l:"Received In",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Received Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
  payment:{title:"Payment Voucher",f:[{k:"number",l:"Voucher No."},{k:"date",l:"Date",t:"date",r:1},{k:"party",l:"Paid To Party",src:"party",r:1},{k:"account",l:"Paid From",opts:["Cash Account","Bank Account"]},{k:"amount",l:"Payment Amount (₹)",t:"number",r:1},{k:"tds",l:"TDS Deducted (₹)",t:"number"},{k:"remark",l:"Narration / Remarks",t:"textarea"}]},
@@ -302,10 +302,10 @@ const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
 const HSN_MAP={"3215":"32159090","8443":"84431200","32151990":"32159090","9988":"998881","3955":"998881"};
-const PAD_HSN="40170030";
-function isPadName(n){return /pad/i.test(String(n==null?"":n))}
+const NAME_HSN=[{re:/pad/i,hsn:"40170030",desc:"PAD",all:false},{re:/solment|solvent/i,hsn:"29153300",desc:"SOLVENT",all:true}];
+function nameRule(n,onlyAll){const t=String(n==null?"":n);return NAME_HSN.find(r=>(!onlyAll||r.all)&&r.re.test(t))||null}
 function hsnFix(v){const t=String(v==null?"":v).trim();return Object.prototype.hasOwnProperty.call(HSN_MAP,t)?HSN_MAP[t]:v}
-function hsnFixAll(){try{(DB.item||[]).forEach(i=>{if(i.hsn)i.hsn=hsnFix(i.hsn)});["sale","purchase","salereturn","purchasereturn"].forEach(k=>(DB[k]||[]).forEach(x=>{if(Array.isArray(x.items))x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn)})}))}catch(e){}}
+function hsnFixAll(){try{(DB.item||[]).forEach(i=>{if(i.hsn)i.hsn=hsnFix(i.hsn);const r=nameRule(i.name,true);if(r)i.hsn=r.hsn});["sale","purchase","salereturn","purchasereturn"].forEach(k=>(DB[k]||[]).forEach(x=>{if(Array.isArray(x.items))x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn);const r=nameRule(((DB.item||[]).find(z=>z.id===l.item)||{}).name,true);if(r)l.hsn=r.hsn})}))}catch(e){}}
 let DB={};
 try{DB=JSON.parse(localStorage.getItem("acc_db")||"{}")}catch(e){DB={}}
 Object.keys(M).forEach(k=>DB[k]=DB[k]||[]);
@@ -385,7 +385,7 @@ const RS={date:today(),party:"",from:"",to:"",fy:FY0,company:"",bookFY:FY0,bookP
 const fyl=y=>y+"-"+String(y+1).slice(2);
 const inr=v=>"₹"+Math.round(+v||0).toLocaleString("en-IN");
 const TG=["saleregister","purchaseregister","receiptregister","paymentregister","recv","pay"];
-const REGTABS=[["daybook","All Vouchers"],["saleregister","Sale Register"],["purchaseregister","Purchase Register"],["salereturnregister","Sale Return Register"],["purchasereturnregister","Purchase Return Register"],["receiptregister","Receipt Register"],["paymentregister","Payment Register"]];
+const REGTABS=[["daybook","All Vouchers"],["saleregister","Sale Register"],["purchaseregister","Purchase Register"],["salereturnregister","Credit Note Register"],["purchasereturnregister","Debit Note Register"],["receiptregister","Receipt Register"],["paymentregister","Payment Register"]];
 function regTabsHtml(){
  if(!REGTABS.some(t=>t[0]===cur))return "";
  return `<div class="rtabs">${REGTABS.map(([k,l])=>`<button type="button" class="${k===cur?"on":""}" onclick="regTab('${k}')">${l}</button>`).join("")}</div>`;
@@ -536,7 +536,7 @@ function stPanel(it,pr){
 /* ===== Search / filter helpers (Day Book, Cash/Bank Book, Registers, Ledgers) ===== */
 RS.rf=RS.rf||{};
 const NOPERIOD=["invset","apiset","urlset","backup","ledger"];
-const VL={sale:"Sale",purchase:"Purchase",salereturn:"Sale Return",purchasereturn:"Purchase Return",receipt:"Receipt",payment:"Payment",journal:"Journal",stock:"Stock Adjustment"};
+const VL={sale:"Sale",purchase:"Purchase",salereturn:"Credit Note (Sale Return)",purchasereturn:"Debit Note (Purchase Return)",receipt:"Receipt",payment:"Payment",journal:"Journal",stock:"Stock Adjustment"};
 const VTYPES=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal"].map(k=>[k,VL[k]]);
 const byDate=(a,b)=>a.date<b.date?-1:a.date>b.date?1:0;
 const rfv=key=>RS.rf[key]||{};
@@ -800,8 +800,8 @@ function gstr1Build(pv){
   else if(cr&&!reg&&big)CDNUR.push({typ:"B2CL",ntty:"C",nt_num:no,nt_dt:dt(x.date),val:r2(g.tot),pos,itms:itms(g,0)});
   else g.lines.forEach(l=>{const ty=g.intra?"INTRA":"INTER",key=ty+"|"+pos+"|"+l.r,a=B2CS[key]=B2CS[key]||{sply_ty:ty,rt:+l.r,typ:"OE",pos,txval:0,iamt:0,camt:0,samt:0,csamt:0};
    a.txval+=sg*l.t;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
-  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=isPadName(it.name||l.name)?PAD_HSN:String(hsnFix(String(l.hsn||it.hsn||"").replace(/[^0-9A-Za-z]/g,""))).trim(),u=String(h).startsWith("99")?"NA":uqcOf(l.unit||it.unit),rr=+(+l.r||0).toFixed(2);if(!h){noHsn++;const em=no+": "+String(it.name||l.name||"Item")+" ka HSN blank hai";if(!HE.includes(em))HE.push(em);return}
-   const key=(reg?"B":"C")+"|"+h+"|"+rr+"|"+u,a=HSN[key]=HSN[key]||{t:reg?"B2B":"B2C",hsn_sc:h,desc:isPadName(it.name||l.name)?"PAD":String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:rr,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
+  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=(nameRule(it.name||l.name)||{}).hsn||String(hsnFix(String(l.hsn||it.hsn||"").replace(/[^0-9A-Za-z]/g,""))).trim(),u=String(h).startsWith("99")?"NA":uqcOf(l.unit||it.unit),rr=+(+l.r||0).toFixed(2);if(!h){noHsn++;const em=no+": "+String(it.name||l.name||"Item")+" ka HSN blank hai";if(!HE.includes(em))HE.push(em);return}
+   const key=(reg?"B":"C")+"|"+h+"|"+rr+"|"+u,a=HSN[key]=HSN[key]||{t:reg?"B2B":"B2C",hsn_sc:h,desc:(nameRule(it.name||l.name)||{}).desc||String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:rr,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
    {const pd=+x.postDisc||0,bs=g.tv+g.tax,f=bs?1-pd/bs:1,v=(l.t+l.tx)*f;a.txval+=sg*l.t;if(u!=="NA")a.qty+=sg*(+l.qty||0);a.val+=sg*v;TH.tv+=sg*l.t;TH.tot+=sg*v;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2;TH.cg+=sg*l.tx/2;TH.sg+=sg*l.tx/2}else{a.iamt+=sg*l.tx;TH.ig+=sg*l.tx}}});
  });
  const rng=set=>{const G={};[...set].forEach(n=>{const mm=String(n).match(/^(.*?)(\d+)$/),p=mm?mm[1]:"\u0000"+n;(G[p]=G[p]||[]).push({n,v:mm?+mm[2]:0,num:!!mm})});
