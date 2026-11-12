@@ -3272,7 +3272,53 @@ function prRun(mode){
  const sel=($("pr_copy")||{}).value||"Original Copy";
  if(mode==="soft")prOpen("Invoice "+(rec.inv||""),prCopies(sel).map(cp=>prEinvHtml(rec,k,cp)).join(""));
  else if(mode==="einv")prPortal(rec,k);
- else prOpen("E-Way Bill "+(rec.ewbNumber||rec.inv||""),prEwbHtml(rec,k));
+ else prPortalEwb(rec,k);
+}
+
+/* Fetch the official Webtel sandbox E-Way Bill Part-B print */
+async function prPortalEwb(rec,k){
+ const ewbNo=String(rec.ewbNumber||rec.ewbNo||"").trim();
+ if(!ewbNo){alert("Is invoice me E-Way Bill Number saved nahi hai. Pehle E-Way Bill generate karke invoice save karein.");return}
+ const c=comp()||{},api=apiCfg();
+ let cfg={};try{cfg=JSON.parse(api.sandw||"{}")||{}}catch(e){}
+ let base={};try{base=JSON.parse(api.sand||"{}")||{}}catch(e){}
+ const gstin=String(c.gstin||cfg.GSTIN||base.GSTIN||"").trim();
+ const efUser=cfg.EFUserName||base.EFUserName||gstin;
+ const efPass=cfg.EFPassword||base.EFPassword||"";
+ const cdKey=cfg.CDKey||base.CDKey||"";
+ const ewbUser=cfg.EWBUserName||cfg.EwbUserName||gstin;
+ const ewbPass=cfg.EWBPassword||cfg.EwbPassword||efPass;
+ if(!gstin||!efUser||!efPass||!cdKey||!ewbUser||!ewbPass){
+  alert("Webtel Sandbox credentials incomplete hain. Other > Webtel API Settings me GSTIN, CDKey, EFUserName/Password aur E-Way Bill credentials check karein.");return;
+ }
+ const d=String(rec.date||"").match(/^(\d{4})-(\d{2})-/);
+ const payload={GSTIN:gstin,ewbNo:ewbNo,Year:d?d[1]:String(new Date().getFullYear()),Month:d?String(parseInt(d[2],10)):String(new Date().getMonth()+1),EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
+ const w=window.open("","_blank");
+ if(!w){alert("Official E-Way Bill print ke liye pop-ups allow karein.");return}
+ w.document.write('<!doctype html><title>E-Way Bill</title><body style="font:14px Arial;padding:28px">Webtel portal se official E-Way Bill print fetch ho raha hai...</body>');
+ try{
+  const url="http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
+  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const raw=await response.text();
+  if(!response.ok)throw new Error("HTTP "+response.status+" - "+raw.slice(0,1200));
+  let data;try{data=JSON.parse(raw)}catch(e){data=raw}
+  const find=(o,keys)=>{if(!o||typeof o!=="object")return "";for(const key of keys){if(o[key]!==undefined&&o[key]!==null&&o[key]!=="")return o[key]}for(const v of Object.values(o)){const z=find(v,keys);if(z)return z}return ""};
+  let b64=typeof data==="string"?data:find(data,["PDF","Pdf","pdf","PDFData","PdfData","FileData","fileData","Base64","base64","Data","data"]);
+  let html=typeof data==="string"&&/^\s*<!doctype html|^\s*<html/i.test(data)?data:find(data,["HTML","Html","html"]);
+  if(html){w.document.open();w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),500);return}
+  if(b64){
+   b64=String(b64).replace(/^data:application\/pdf;base64,/i,"").replace(/\s/g,"");
+   const bin=atob(b64),bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+   const blob=new Blob([bytes],{type:"application/pdf"}),blobUrl=URL.createObjectURL(blob);
+   w.location.href=blobUrl;setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);return;
+  }
+  w.document.open();w.document.write('<!doctype html><title>E-Way Bill API Response</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');
+  w.document.body.textContent=typeof data==="string"?data:JSON.stringify(data,null,2);w.document.close();
+ }catch(err){
+  w.close();
+  const mixed=location.protocol==="https:"?"\n\nNote: Software HTTPS par open hai aur aapka Webtel URL HTTP hai. Browser mixed-content block kar sakta hai; HTTPS endpoint ya backend proxy chahiye.":"";
+  alert("Official E-Way Bill print fetch nahi ho saka.\n"+(err.message||err)+mixed);
+ }
 }
 function ppSet(key,v){const c=comp();if(!c)return;c[key]=v;save()}
 function ppImg(el,key){
