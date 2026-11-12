@@ -302,6 +302,8 @@ const OPEN={Master:false,Company:false,Transactions:false,Utility:false,Display:
 const T=k=>M[k]?M[k].title:(R[k]?R[k].t:PT[k]);
 
 const HSN_MAP={"3215":"32159090","8443":"84431200","32151990":"32159090","9988":"998881","3955":"998881"};
+const PAD_HSN="40170030";
+function isPadName(n){return /pad/i.test(String(n==null?"":n))}
 function hsnFix(v){const t=String(v==null?"":v).trim();return Object.prototype.hasOwnProperty.call(HSN_MAP,t)?HSN_MAP[t]:v}
 function hsnFixAll(){try{(DB.item||[]).forEach(i=>{if(i.hsn)i.hsn=hsnFix(i.hsn)});["sale","purchase","salereturn","purchasereturn"].forEach(k=>(DB[k]||[]).forEach(x=>{if(Array.isArray(x.items))x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn)})}))}catch(e){}}
 let DB={};
@@ -798,8 +800,8 @@ function gstr1Build(pv){
   else if(cr&&!reg&&big)CDNUR.push({typ:"B2CL",ntty:"C",nt_num:no,nt_dt:dt(x.date),val:r2(g.tot),pos,itms:itms(g,0)});
   else g.lines.forEach(l=>{const ty=g.intra?"INTRA":"INTER",key=ty+"|"+pos+"|"+l.r,a=B2CS[key]=B2CS[key]||{sply_ty:ty,rt:+l.r,typ:"OE",pos,txval:0,iamt:0,camt:0,samt:0,csamt:0};
    a.txval+=sg*l.t;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
-  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=String(hsnFix(String(l.hsn||it.hsn||"").replace(/[^0-9A-Za-z]/g,""))).trim(),u=String(h).startsWith("99")?"NA":uqcOf(l.unit||it.unit),rr=+(+l.r||0).toFixed(2);if(!h){noHsn++;const em=no+": "+String(it.name||l.name||"Item")+" ka HSN blank hai";if(!HE.includes(em))HE.push(em);return}
-   const key=(reg?"B":"C")+"|"+h+"|"+rr+"|"+u,a=HSN[key]=HSN[key]||{t:reg?"B2B":"B2C",hsn_sc:h,desc:String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:rr,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
+  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=isPadName(it.name||l.name)?PAD_HSN:String(hsnFix(String(l.hsn||it.hsn||"").replace(/[^0-9A-Za-z]/g,""))).trim(),u=String(h).startsWith("99")?"NA":uqcOf(l.unit||it.unit),rr=+(+l.r||0).toFixed(2);if(!h){noHsn++;const em=no+": "+String(it.name||l.name||"Item")+" ka HSN blank hai";if(!HE.includes(em))HE.push(em);return}
+   const key=(reg?"B":"C")+"|"+h+"|"+rr+"|"+u,a=HSN[key]=HSN[key]||{t:reg?"B2B":"B2C",hsn_sc:h,desc:isPadName(it.name||l.name)?"PAD":String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:rr,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
    {const pd=+x.postDisc||0,bs=g.tv+g.tax,f=bs?1-pd/bs:1,v=(l.t+l.tx)*f;a.txval+=sg*l.t;if(u!=="NA")a.qty+=sg*(+l.qty||0);a.val+=sg*v;TH.tv+=sg*l.t;TH.tot+=sg*v;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2;TH.cg+=sg*l.tx/2;TH.sg+=sg*l.tx/2}else{a.iamt+=sg*l.tx;TH.ig+=sg*l.tx}}});
  });
  const rng=set=>{const G={};[...set].forEach(n=>{const mm=String(n).match(/^(.*?)(\d+)$/),p=mm?mm[1]:"\u0000"+n;(G[p]=G[p]||[]).push({n,v:mm?+mm[2]:0,num:!!mm})});
