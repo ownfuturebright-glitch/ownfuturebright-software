@@ -763,7 +763,7 @@ function gstCalc(x){
 const gm=()=>RS.gm===undefined?today().slice(0,7):RS.gm;
 function gstRows(){
  const m=gm(),rows=[];
- [["sale"],["salereturn"]].forEach(([k])=>DB[k].filter(x=>!m||String(x.date).startsWith(m)).forEach(x=>{const g=gstCalc(x);rows.push({sec:k==="sale"?(g.pt.gstin?"B2B":"B2C"):(g.pt.gstin?"CDNR":"CDNUR"),g,x,no:docNo(k,x)})}));
+ [["sale"],["salereturn"]].forEach(([k])=>DB[k].filter(x=>!m||String(x.date).startsWith(m)).forEach(x=>{const g=gstCalc(x);const big=!g.intra&&g.tot>250000;rows.push({k,sec:k==="sale"?(g.pt.gstin?"B2B":(big?"B2CL":"B2CS")):(g.pt.gstin?"CDNR":(big?"CDNUR":"B2CS (Return)")),g,x,no:docNo(k,x)})}));
  return rows.sort((a,b)=>a.x.date<b.x.date?-1:a.x.date>b.x.date?1:0);
 }
 function gstr1Csv(){
@@ -772,13 +772,69 @@ function gstr1Csv(){
  gstRows().forEach(({sec,g,x,no})=>L.push([sec,g.pt.gstin||"",g.pt.name||"",no,fd(x.date),r2(g.tv),g.rt===""?"Mixed":g.rt,r2(g.cg),r2(g.sg),r2(g.ig),r2(g.tot)].map(q).join(",")));
  dl("GSTR1_"+(gm()||"all")+".csv",L.join("\n"),"text/csv");
 }
+
+function gstr1Build(){
+ const m=gm();if(!m)return {err:"Select a month above to prepare GSTR-1 JSON, HSN summary and documents issued (GSTR-1 is filed month-wise)."};
+ const c=comp(),cg=String(c.gstin||"").toUpperCase().replace(/\s/g,"");
+ if(cg.length!==15)return {err:"Company GSTIN is missing or invalid in Company Master."};
+ const rows=gstRows(),W=[],cs=stc(c),fp=m.slice(5,7)+m.slice(0,4);
+ const dt=d=>String(d).split("-").reverse().join("-"),p2=v=>String(v||cs||"").padStart(2,"0");
+ const itms=(g,full)=>{const M={};g.lines.forEach(l=>{const a=M[l.r]=M[l.r]||{t:0,x:0};a.t+=l.t;a.x+=l.tx});
+  return Object.keys(M).map((rt,i)=>{const a=M[rt],d={txval:r2(a.t),rt:+rt,iamt:g.intra?0:r2(a.x)};if(full){d.camt=g.intra?r2(a.x/2):0;d.samt=g.intra?r2(a.x/2):0}d.csamt=0;return {num:i+1,itm_det:d}})};
+ const B2B={},B2CL={},B2CS={},CDNR={},CDNUR=[],HSN={},DI={inv:new Set(),cr:new Set()};let noHsn=0,noPos=0,badG=0;
+ rows.forEach(({k,g,x,no})=>{
+  const cr=k==="salereturn",gst=String(g.pt.gstin||"").toUpperCase().replace(/\s/g,""),reg=gst.length>0,big=!g.intra&&g.tot>250000,pos=p2(g.pos),sg=cr?-1:1;
+  if(!g.pos)noPos++;if(reg&&gst.length!==15)badG++;
+  (cr?DI.cr:DI.inv).add(no);
+  if(!cr&&reg)(B2B[gst]=B2B[gst]||[]).push({inum:no,idt:dt(x.date),val:r2(g.tot),pos,rchrg:"N",inv_typ:"R",itms:itms(g,1)});
+  else if(!cr&&!reg&&big)(B2CL[pos]=B2CL[pos]||[]).push({inum:no,idt:dt(x.date),val:r2(g.tot),itms:itms(g,0)});
+  else if(cr&&reg)(CDNR[gst]=CDNR[gst]||[]).push({ntty:"C",nt_num:no,nt_dt:dt(x.date),val:r2(g.tot),pos,rchrg:"N",inv_typ:"R",itms:itms(g,1)});
+  else if(cr&&!reg&&big)CDNUR.push({typ:"B2CL",ntty:"C",nt_num:no,nt_dt:dt(x.date),val:r2(g.tot),pos,itms:itms(g,0)});
+  else g.lines.forEach(l=>{const ty=g.intra?"INTRA":"INTER",key=ty+"|"+pos+"|"+l.r,a=B2CS[key]=B2CS[key]||{sply_ty:ty,rt:+l.r,typ:"OE",pos,txval:0,iamt:0,camt:0,samt:0,csamt:0};
+   a.txval+=sg*l.t;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
+  g.lines.forEach(l=>{const it=DB.item.find(i=>i.id===l.item)||{},h=String(l.hsn||it.hsn||"").trim(),u=UQC[l.unit||it.unit]||"OTH";if(!h)noHsn++;
+   const key=h+"|"+l.r+"|"+u,a=HSN[key]=HSN[key]||{hsn_sc:h,desc:String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:+l.r,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
+   a.qty+=sg*(+l.qty||0);a.txval+=sg*l.t;a.val+=sg*(l.t+l.tx);if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2}else a.iamt+=sg*l.tx});
+ });
+ const rng=set=>{const G={};[...set].forEach(n=>{const mm=String(n).match(/^(.*?)(\d+)$/),p=mm?mm[1]:"\u0000"+n;(G[p]=G[p]||[]).push({n,v:mm?+mm[2]:0,num:!!mm})});
+  return Object.values(G).map(a=>{a.sort((x,y)=>x.v-y.v||(x.n<y.n?-1:1));const f=a[0],l=a[a.length-1],tot=f.num?l.v-f.v+1:a.length;return {from:f.n,to:l.n,totnum:tot,cancel:Math.max(0,tot-a.length),net_issue:a.length}})};
+ const di=[];[[1,"Invoices for outward supply",DI.inv],[5,"Credit Note",DI.cr]].forEach(([n,t,set])=>{const d=rng(set);if(d.length)di.push({doc_num:n,doc_typ:t,docs:d.map((z,i)=>({num:i+1,...z}))})});
+ const cancelled=di.reduce((a,t)=>a+t.docs.reduce((b,z)=>b+z.cancel,0),0);
+ const longNo=[...DI.inv,...DI.cr].filter(n=>String(n).length>16).length;
+ if(noHsn)W.push(noHsn+" item line(s) have no HSN code (fill HSN in Item Master or on the bill).");
+ if(noPos)W.push(noPos+" document(s) have no Place of Supply, so the company state is used.");
+ if(badG)W.push(badG+" document(s) have a party GSTIN that is not 15 characters.");
+ if(cancelled)W.push(cancelled+" number(s) are missing inside the invoice/credit note series and are shown as Cancelled in Documents Issued.");
+ if(longNo)W.push(longNo+" document number(s) are longer than 16 characters, which the GST portal does not accept.");
+ const hsn=Object.values(HSN).map((a,i)=>({num:i+1,hsn_sc:a.hsn_sc,desc:a.desc,uqc:a.uqc,qty:r2(a.qty),rt:a.rt,txval:r2(a.txval),val:r2(a.val),iamt:r2(a.iamt),camt:r2(a.camt),samt:r2(a.samt),csamt:0}));
+ const j={gstin:cg,fp,version:"GST3.1.6",hash:"hash",gt:0,cur_gt:0};
+ const b2b=Object.keys(B2B).map(ctin=>({ctin,inv:B2B[ctin]})),b2cl=Object.keys(B2CL).map(pos=>({pos,inv:B2CL[pos]})),b2cs=Object.values(B2CS).map(a=>{const o={sply_ty:a.sply_ty,rt:a.rt,typ:a.typ,pos:a.pos,txval:r2(a.txval)};if(a.sply_ty==="INTER")o.iamt=r2(a.iamt);else{o.camt=r2(a.camt);o.samt=r2(a.samt)}o.csamt=0;return o}),cdnr=Object.keys(CDNR).map(ctin=>({ctin,nt:CDNR[ctin]}));
+ if(b2b.length)j.b2b=b2b;if(b2cl.length)j.b2cl=b2cl;if(b2cs.length)j.b2cs=b2cs;if(cdnr.length)j.cdnr=cdnr;if(CDNUR.length)j.cdnur=CDNUR;
+ if(hsn.length)j.hsn={data:hsn};if(di.length)j.doc_issue={doc_det:di};
+ return {j,W,fp,hsn,di,cg};
+}
+function gstr1Json(){
+ const r=gstr1Build();if(r.err){alert(r.err);return}
+ if(!r.j.b2b&&!r.j.b2cl&&!r.j.b2cs&&!r.j.cdnr&&!r.j.cdnur){alert("No sale or sale return entries found for this month.");return}
+ if(r.W.length&&!confirm("Please check before downloading:\n\n• "+r.W.join("\n• ")+"\n\nOK = download JSON anyway\nCancel = go back and fix"))return;
+ dl("GSTR1_"+r.cg+"_"+r.fp+".json",JSON.stringify(r.j,null,1),"application/json");
+}
 R.gstlogin={t:"GST Portal Login",f(){const c=comp();return `<div style="padding:22px;line-height:1.8"><p>Company: <b>${esc(c.name||"-")}</b> &nbsp; GSTIN: <b>${esc(c.gstin||"-")}</b></p><button onclick="window.open('https://services.gst.gov.in/services/login','_blank')">Open GST Portal Login</button> <button class="g" onclick="cpTxt('${esc(c.gstin||"")}')">Copy GSTIN</button><p style="color:#6b7690;font-size:13px">The official GST portal opens in a new tab. Your username, password or OTP is never saved in this file.</p></div>`}};
 R.gstr1={t:"Generate GSTR-1",f(){
  const rows=gstRows(),S={};
  rows.forEach(r=>{const a=S[r.sec]=S[r.sec]||{n:0,tv:0,tax:0};a.n++;a.tv+=r.g.tv;a.tax+=r.g.tax});
- const ctl=`<div class="ctl"><div><label>Month (leave blank for all)</label><input type="month" value="${gm()}" onchange="RS.gm=this.value;render()"></div><button onclick="gstr1Csv()">⬇ Download CSV</button></div>`;
+ const ctl=`<div class="ctl"><div><label>Month (leave blank for all)</label><input type="month" value="${gm()}" onchange="RS.gm=this.value;render()"></div><button onclick="gstr1Csv()">⬇ Download CSV</button><button onclick="gstr1Json()">⬇ Download GSTR-1 JSON</button></div>`;
  const t=tbl(["Section","GSTIN","Party","Doc No","Date","Taxable","GST %","CGST","SGST","IGST","Total"],rows.map(({sec,g,x,no})=>[sec,esc(g.pt.gstin||""),esc(g.pt.name||""),esc(no),x.date,n2(g.tv),g.rt===""?"Mixed":g.rt,n2(g.cg),n2(g.sg),n2(g.ig),n2(g.tot)]),Object.keys(S).map(k=>`${k}: ${S[k].n} docs, Taxable ₹${n2(S[k].tv)}, GST ₹${n2(S[k].tax)}`).join(" &nbsp;|&nbsp; "));
- return ctl+t+`<div style="padding:10px 14px;font-size:12px;color:#6b7690">The Sale / Sale Return amount is treated as the taxable value, and the GST % comes from Item Master. If the Party and Company State Code are the same, CGST + SGST apply, otherwise IGST. This CSV is a summary, not a GST portal JSON / offline tool file.</div>`}};
+ const B=gstr1Build();let ex="";
+ if(B.err)ex=`<div style="padding:10px 14px;font-size:13px;color:#b45309">${esc(B.err)}</div>`;
+ else{
+  const hd=h=>`<div style="padding:14px 14px 4px;font-weight:700">${h}</div>`;
+  ex+=hd("HSN Summary (Table 12)")+(B.hsn.length?tbl(["#","HSN","Description","UQC","Qty","GST %","Taxable","IGST","CGST","SGST","Total"],B.hsn.map(a=>[a.num,esc(a.hsn_sc||"-"),esc(a.desc),a.uqc,n2(a.qty),a.rt,n2(a.txval),n2(a.iamt),n2(a.camt),n2(a.samt),n2(a.val)])):'<div class="empty">No items for this month.</div>');
+  const dr=[];B.di.forEach(t=>t.docs.forEach(z=>dr.push([esc(t.doc_typ),esc(z.from),esc(z.to),z.totnum,z.cancel,z.net_issue])));
+  ex+=hd("Documents Issued (Table 13)")+(dr.length?tbl(["Document Type","From (Sr. No.)","To (Sr. No.)","Total Number","Cancelled","Net Issued"],dr):'<div class="empty">No documents for this month.</div>');
+  if(B.W.length)ex+=`<div style="padding:10px 14px;font-size:12px;color:#b45309;line-height:1.7">⚠ ${B.W.map(esc).join("<br>⚠ ")}</div>`;
+ }
+ return ctl+t+ex+`<div style="padding:10px 14px;font-size:12px;color:#6b7690">The Sale / Sale Return amount is treated as the taxable value, and the GST % comes from Item Master. If the Party and Company State Code are the same, CGST + SGST apply, otherwise IGST. B2CL = unregistered interstate invoice above ₹2,50,000; other unregistered sales go to B2CS (unregistered sale returns are deducted there). The JSON includes B2B, B2CL, B2CS, CDNR, CDNUR, HSN summary and documents issued in GST offline-tool format. Review it on the GST portal / offline tool before filing.</div>`}};
 RS.rmsg="Hello {name}, this is a reminder from {company} that ₹{amount} is outstanding on your account. Kindly make the payment at the earliest. Thank you.";
 const remMsg=p=>RS.rmsg.replace(/\{name\}/g,p.name).replace(/\{amount\}/g,n2(bal(p))).replace(/\{company\}/g,comp().name||"");
 function wa(id){const p=DB.party.find(x=>x.id===id);let ph=String(p.phone||"").replace(/\D/g,"");if(ph.length===10)ph="91"+ph;if(!ph){alert("This party has no phone number");return}window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(remMsg(p)),"_blank")}
