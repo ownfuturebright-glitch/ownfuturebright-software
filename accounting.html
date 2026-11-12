@@ -459,6 +459,7 @@ function setDt(k,v){
  const y=+String(v).slice(0,4);
  if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&y>=1990&&y<=2100){RS[k]=v;render()}
 }
+function setDt1(v){const y=+String(v).slice(0,4);if(v===""){RS.periodFrom="";RS.periodTo="";render();return}if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&y>=1990&&y<=2100){RS.periodFrom=v;RS.periodTo=v;render()}}
 function reportPeriodRange(){
  const type=RS.periodType||"Month", fy=+(RS.periodFY??RS.fy), m=+(RS.periodMonth||4);
  if(type==="Custom Date") return {from:RS.periodFrom||fy+"-04-01",to:RS.periodTo||(fy+1)+"-03-31"};
@@ -471,7 +472,7 @@ function reportPeriodControls(){
  const months=names.map((name,i)=>`<option value="${i+1}" ${+(RS.periodMonth||4)===i+1?"selected":""}>${name}</option>`).join("");
  const fys=Array.from({length:8},(_,i)=>FY0+2-i).map(y=>`<option value="${y}" ${y===fy?"selected":""}>${fyl(y)}</option>`).join("");
  const r=reportPeriodRange();
- return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`:""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
+ return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?(/^(sale|purchase|salereturn|purchasereturn)register$/.test(cur)?`<div><label>Date</label><input type="date" value="${RS.periodFrom&&RS.periodFrom===RS.periodTo?RS.periodFrom:""}" onchange="setDt1(this.value)"></div>`:`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`):""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
 }
 function bookPeriodRange(){return reportPeriodRange()}
 function bookPeriodControls(){return reportPeriodControls()}
@@ -528,6 +529,7 @@ function rfSet(key,k,v,keep){
  if(keep){const e=document.getElementById("rf_"+key+"_"+k);if(e){e.focus();try{e.setSelectionRange(e.value.length,e.value.length)}catch(x){}}}
 }
 function rfDate(key,k,v){if(v&&!/^\d{4}-\d{2}-\d{2}$/.test(v))return;const y=+String(v).slice(0,4);if(v&&(y<1990||y>2100))return;rfSet(key,k,v)}
+function rfOne(key,v){if(v&&!/^\d{4}-\d{2}-\d{2}$/.test(v))return;const y=+String(v).slice(0,4);if(v&&(y<1990||y>2100))return;RS.rf[key]=RS.rf[key]||{};RS.rf[key].date=v;RS.rf[key].dateTo=v;render()}
 function rfClear(key){delete RS.rf[key];render()}
 function rfToday(key){RS.rf[key]=RS.rf[key]||{};RS.rf[key].date=RS.rf[key].dateTo=today();render()}
 function rfBar(key,o){
@@ -536,7 +538,7 @@ function rfBar(key,o){
  const dt=(k,l)=>`<div><label>${l}</label><input id="rf_${key}_${k}" type="date" value="${esc(f[k]||"")}" onchange="rfDate('${key}','${k}',this.value)"></div>`;
  const ty=o.types?`<div><label>Voucher Type</label><select id="rf_${key}_type" onchange="rfSet('${key}','type',this.value)"><option value="">All Types</option>${o.types.map(([v,l])=>`<option value="${v}" ${f.type===v?"selected":""}>${l}</option>`).join("")}</select></div>`:"";
  const note=(o.period&&(f.date||f.dateTo))?`<span style="font-size:11px;color:#b26a00;margin-left:10px">Date filter is on, so the Period selected above is not used.</span>`:"";
- return `<div class="rfb"><b style="font-size:12px">🔍 Search / Filter</b>${note}<div class="ctl">${o.pre||""}${o.noDates?"":dt("date","From Date")+dt("dateTo","To Date")}${ty}${tx("no",o.noL||"Voucher No.","Search number")}${tx("text",o.textL||"Party / Particulars","Search party or particulars")}${tx("dr",o.drL||"Debit","Amount",1)}${o.noCr?"":tx("cr",o.crL||"Credit","Amount",1)}<div style="min-width:90px;display:flex;gap:6px">${o.today?`<button type="button" onclick="rfToday('${key}')">Today</button>`:""}<button type="button" class="g" onclick="rfClear('${key}')">Clear</button></div></div></div>`;
+ return `<div class="rfb"><b style="font-size:12px">🔍 Search / Filter</b>${note}<div class="ctl">${o.pre||""}${o.noDates?"":(o.oneDate?`<div><label>Date</label><input id="rf_${key}_date" type="date" value="${esc(f.date||"")}" onchange="rfOne('${key}',this.value)"></div>`:dt("date","From Date")+dt("dateTo","To Date"))}${ty}${tx("no",o.noL||"Voucher No.","Search number")}${tx("text",o.textL||"Party / Particulars","Search party or particulars")}${tx("dr",o.drL||"Debit","Amount",1)}${o.noCr?"":tx("cr",o.crL||"Credit","Amount",1)}<div style="min-width:90px;display:flex;gap:6px">${o.today?`<button type="button" onclick="rfToday('${key}')">Today</button>`:""}<button type="button" class="g" onclick="rfClear('${key}')">Clear</button></div></div></div>`;
 }
 function rfRange(key,noPeriod){
  const f=rfv(key);
@@ -3215,7 +3217,7 @@ function renderSale(){
  const l=all.filter(r=>rfPass(rk,r));let tv=0,tx=0,tt=0;
  const rows=l.map((r,i)=>{tv+=r.g.tv;tx+=r.g.tax;tt+=r.t;const x=r.x;
   return [i+1,fd(x.date),`<a class="lnk" style="font-size:13px" onclick="regOpen('${k}','${x.id}')" title="Open this entry">${esc(r.no)}</a>`,esc(r.party),esc(lineSum(x)),n2(r.g.tv),n2(r.g.tax),n2(r.t),esc(x.remark||""),act(k,x.id)]});
- return rfBar(rk,{period:1,noCr:1,drL:"Total Amount",textL:"Party / Items / Narration",noL:KC[k].no.replace(".","")})+regOutBanner(rk,k,rg)+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration","Action"],rows,`Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
+ return rfBar(rk,{period:1,oneDate:1,noCr:1,drL:"Total Amount",textL:"Party / Items / Narration",noL:KC[k].no.replace(".","")})+tbl(["#","Date",KC[k].no.replace(".",""),KC[k].pl.replace(" Name",""),"Items","Taxable","GST","Total","Narration","Action"],rows,`Entries: ${l.length}${l.length!==all.length?" of "+all.length:""} &nbsp; Taxable: ₹ ${n2(tv)} &nbsp; GST: ₹ ${n2(tx)} &nbsp; Total: ₹ ${n2(tt)}`)}});
 
 let cur="dashboard",editId=null;
 const $=id=>document.getElementById(id);
