@@ -937,12 +937,20 @@ function edocBuild(kind){
    if(!E.veh&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
   }
  }
- else{const E=RS.ew;j={supplyType:"O",subSupplyType:"1",docType:"INV",docNo:no,docDate:fd(x.date),
-  fromGstin:c.gstin||"",fromTrdName:c.name||"",fromAddr1:SA.a1,fromAddr2:SA.a2,fromPlace:c.city||stName(stc(c)),fromPincode:pin(c.pin),fromStateCode:+stc(c)||0,actFromStateCode:+stc(c)||0,
-  toGstin:pt.gstin||"URP",toTrdName:pt.name||"",toAddr1:BA.a1,toAddr2:BA.a2,toPlace:pt.city||stName(stc(pt)),toPincode:pin(pt.pin),toStateCode:+pos||0,actToStateCode:+pos||0,
-  totalValue:r2(g.tv),cgstValue:r2(T.cg),sgstValue:r2(T.sg),igstValue:r2(T.ig),cessValue:0,totInvValue:inv,
-  transMode:"1",transDistance:String(E.dist||"0"),transporterName:E.tname,transporterId:E.tid,vehicleNo:E.veh,vehicleType:"R",
-  itemList:IL.map(o=>({productName:o.it.name||"",productDesc:o.it.name||"",hsnCode:+o.hsn||0,quantity:o.q,qtyUnit:o.u,taxableAmount:r2(o.l.t),cgstRate:intra?o.l.r/2:0,sgstRate:intra?o.l.r/2:0,igstRate:intra?0:o.l.r,cessRate:0}))};
+ else{const E=RS.ew,dt=String(x.date||"").replace(/-/g,""),yr=+dt.slice(0,4)||0,mo=+dt.slice(4,6)||0,sc=String(stc(c)).padStart(2,"0"),rc=String(pos||stc(pt)).padStart(2,"0");
+  j={Push_Data_List:IL.map(o=>({Irn:"",GSTIN:c.gstin||"",Year:yr,Month:mo,SupplyType:"O",SubType:"1",DocType:"INV",DocNo:no,DocDate:dt,
+   SupGSTIN:c.gstin||"",SupName:c.name||"",SupAdd1:SA.a1||"",SupAdd2:SA.a2||"",SupCity:c.city||stName(stc(c)),SupState:sc,SupPincode:String(pin(c.pin)),
+   RecGSTIN:pt.gstin||"URP",RecName:pt.name||"",RecAdd1:BA.a1||"",RecAdd2:BA.a2||"",Reccity:pt.city||stName(stc(pt)),RecState:rc,Recpincode:String(pin(pt.pin)),
+   TransMode:String(E.transMode||"1"),TransporterId:E.tid||"",TransporterName:E.tname||"",TransDistance:String(E.dist||"0"),TransDocNo:E.transDocNo||"",TransDocDate:E.transDocDt?fd(E.transDocDt):"",
+   VehicleType:E.vehType||"R",VehicleNo:E.veh||"",
+   ProductName:o.it.name||"",ProductDesc:o.it.name||"",HSNCode:String(o.hsn||""),Quantity:o.q,QtyUnit:o.u,
+   TaxableValue:r2(o.l.t),TotalValue:r2(g.tv),
+   SGSTRate:intra?o.l.r/2:0,SGSTValue:r2(o.s.sg),CGSTRate:intra?o.l.r/2:0,CGSTValue:r2(o.s.cg),IGSTRate:intra?0:o.l.r,IGSTValue:r2(o.s.ig),
+   CessRate:0,CessValue:0,
+   EWBUserName:"",EWBPassword:"",CessNonAdvol:0,SubSupplyDesc:"",ShipFromStateCode:sc,ShipToStateCode:rc,TotalInvoiceValue:String(inv),CessNonAdvolValue:0,OtherValue:r2(rnd-pd),dispatchFromGSTIN:c.gstin||"",dispatchFromTradeName:c.name||"",ShipToGSTIN:pt.gstin||"URP",ShipToTradeName:pt.name||"",IsBillFromShipFromSame:"1",IsBillToShipToSame:"1",IsGSTINSEZ:0})),
+   Year:yr,Month:mo};
+  if(!E.dist||+E.dist<=0)iss.push("Note: Distance is 0 - the portal will auto-calculate it (enter km if you get an error)");
+  if(!E.veh&&!E.tid)iss.push("Enter Vehicle No. or Transporter ID for the E-Way Bill");
   if(inv<=50000)iss.push("Note: the invoice value is below ₹50,000, so an e-way bill is usually not required (please verify the rules)")}
  return {j,iss,no};
 }
@@ -1002,9 +1010,11 @@ function apiTpl(kind,act){
 }
 function fany(o,k){if(o&&typeof o==="object"){if(k in o&&o[k]!==null&&typeof o[k]!=="object")return o[k];for(const v of Object.values(o)){const r=fany(v,k);if(r!=="")return r}}return ""}
 function findKey(o,k){if(o&&typeof o==="object"){if(k in o&&typeof o[k]==="string")return o[k];for(const v of Object.values(o)){const r=findKey(v,k);if(r)return r}}return ""}
+function ewbPush(b){if(!b||!Array.isArray(b.Push_Data_List))return b;const u=b.EWBUserName||b.EwbUserName||"",p=b.EWBPassword||b.EwbPassword||"";
+ b.Push_Data_List.forEach(r=>{if(u)r.EWBUserName=u;if(p)r.EWBPassword=p});delete b.EWBUserName;delete b.EWBPassword;delete b.EwbUserName;delete b.EwbPassword;return b}
 function apiBodyFor(kind,live){
  const C0=apiCfg(),cr0=credEff(kind,live),T0=apiTpl(kind,RS.api.act);
- return JSON.stringify(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...T0,...cr0},null,2);
+ return JSON.stringify(ewbPush(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...T0,...cr0}),null,2);
 }
 function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
@@ -1028,7 +1038,7 @@ async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
  const C=apiCfg(),cr=credEff(kind,live);if(cr===null){alert("The credentials in Webtel API Settings are not valid JSON");return}
- h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body={...body,...cr};
+ h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body=ewbPush({...body,...cr});
  if(live&&!confirm("LIVE API: "+act[1]+"\nThis "+(kind==="einv"?"e-invoice":"e-way bill")+" will create or change a real document. Are you sure you want to send it?"))return;
  a.resp="Sending...";render();
  try{
