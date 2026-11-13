@@ -998,13 +998,14 @@ RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
 ["l","s"].forEach(e=>{try{RS.hdr[e]=localStorage.getItem("acc_api_hdr_"+e)||"{}"}catch(x){RS.hdr[e]="{}"}});
 function hdrSet(v,e){RS.hdr[e]=v;try{localStorage.setItem("acc_api_hdr_"+e,v)}catch(x){}}
 function apiTpl(kind,act){
+ const sx=DB.sale.find(z=>z.id===RS.es)||{},dm=String(sx.date||"").match(/^(\d{4})-(\d{2})-/),en=sx.ewbNumber||"",pb={GSTIN:sx.ewbGstin||(comp().gstin||""),ewbNo:en,Year:String(dm?+dm[1]:new Date().getFullYear()),Month:String(dm?+dm[2]:new Date().getMonth()+1)};
  const ewbIrn={Irn:RS.irn||"",TransId:"",TransMode:"1",TransDocNo:"",TransDocDt:"",VehNo:"",Distance:0,VehType:"R",TransName:""};
  const T={einv:{can:{Irn:RS.irn||"",CnlRsn:"1",CnlRem:"Data entry mistake"},prt:{Irn:RS.irn||""},ewbirn:ewbIrn},
-  ewb:{genirn:ewbIrn,prt:{ewbNo:""},prtd:{ewbNo:""},veh:{ewbNo:"",vehicleNo:"",fromPlace:"",fromState:0,reasonCode:"1",reasonRem:"",transDocNo:"",transDocDate:"",transMode:"1",vehicleType:"R"},
-   can:{ewbNo:"",cancelRsnCode:2,cancelRmrk:"Data entry mistake"},rej:{ewbNo:""},
-   con:{fromPlace:"",fromState:0,vehicleNo:"",transMode:"1",transDocNo:"",transDocDate:"",tripSheetEwbBills:[{ewbNo:""}]},
-   get:{ewbNo:""},tr:{ewbNo:"",transporterId:""},
-   ext:{ewbNo:"",vehicleNo:"",fromPlace:"",fromState:0,remainingDistance:0,transDocNo:"",transDocDate:"",transMode:"1",extnRsnCode:1,extnRemarks:"",fromPincode:0,consignmentStatus:"M",transitType:"",addressLine1:"",addressLine2:"",addressLine3:""}}};
+  ewb:{genirn:ewbIrn,prt:pb,prtd:pb,prta:pb,prtb:pb,veh:{ewbNo:en,vehicleNo:"",fromPlace:"",fromState:0,reasonCode:"1",reasonRem:"",transDocNo:"",transDocDate:"",transMode:"1",vehicleType:"R"},
+   can:{ewbNo:en,cancelRsnCode:2,cancelRmrk:"Data entry mistake"},rej:{ewbNo:en},
+   con:{fromPlace:"",fromState:0,vehicleNo:"",transMode:"1",transDocNo:"",transDocDate:"",tripSheetEwbBills:[{ewbNo:en}]},
+   get:{ewbNo:en},tr:{ewbNo:en,transporterId:""},
+   ext:{ewbNo:en,vehicleNo:"",fromPlace:"",fromState:0,remainingDistance:0,transDocNo:"",transDocDate:"",transMode:"1",extnRsnCode:1,extnRemarks:"",fromPincode:0,consignmentStatus:"M",transitType:"",addressLine1:"",addressLine2:"",addressLine3:""}}};
  if(act==="gen"||act==="gen2"){const r=edocBuild(kind);return r?r.j:{}}
  return T[kind][act]||{};
 }
@@ -1020,7 +1021,7 @@ function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
  if(a.pk!==kind+e){a.pk=kind+e;a.act=kind==="einv"?"gen2":"gen"}
  if(!L.some(z=>z[0]===a.act))a.act="gen";
- const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
+ const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+((DB.sale.find(z=>z.id===RS.es)||{}).ewbNumber||"")+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
  if(a.sig!==sig){a.sig=sig;a.body=apiBodyFor(kind,live)}
  const act=L.find(z=>z[0]===a.act);
  return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
@@ -1094,6 +1095,7 @@ async function apiSend(kind,live){
   try{const J=JSON.parse(t),x=DB.sale.find(z=>z.id===RS.es),irn0=findKey(J,"Irn");
    if(irn0&&kind==="einv"&&(a.act==="gen"||a.act==="gen2"))RS.irn=irn0;
    const sv=edocApply(kind,live,a.act,body,J,x);
+   if(sv.length&&x){const gE=kind==="ewb"&&(a.act==="gen"||a.act==="genirn"),gI=kind==="einv"&&(a.act==="gen"||a.act==="gen2");if(gE||x.ewbNumber&&gI)x.ewbResponse=t;if(gI)x.irnResponse=t;if(gE||gI)save()}
    if(sv.length)a.resp+="\n\n\u2714 Saved in database on bill "+(x.inv||"")+": "+sv.join(", ")+". Print will now use these details.";
    else if((kind==="einv"&&(a.act==="gen"||a.act==="gen2"))||(kind==="ewb"&&(a.act==="gen"||a.act==="genirn")))a.resp+="\n\n\u26A0 Nothing was saved: no IRN / E-Way Bill number was found in this response.";
   }catch(x){}
@@ -3342,7 +3344,7 @@ async function prPortalEwb(rec,k){
   alert("Webtel Sandbox credentials incomplete/invalid hain. Other > Webtel API Settings me Sandbox GSTIN (15 characters), CDKey, EFUserName/Password aur EWBUserName/Password check karein. Company Master ka Live GSTIN Sandbox GSTIN se alag ho sakta hai.");return;
  }
  const d=String(rec.date||"").match(/^(\d{4})-(\d{2})-/);
- const payload={GSTIN:gstin,ewbNo:ewbNo,Year:d?parseInt(d[1],10):new Date().getFullYear(),Month:d?parseInt(d[2],10):new Date().getMonth()+1,EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
+ const payload={GSTIN:gstin,ewbNo:ewbNo,Year:String(d?parseInt(d[1],10):new Date().getFullYear()),Month:String(d?parseInt(d[2],10):new Date().getMonth()+1),EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
  const w=window.open("","_blank");
  if(!w){alert("Official E-Way Bill print ke liye pop-ups allow karein.");return}
  w.document.write('<!doctype html><title>E-Way Bill</title><body style="font:14px Arial;padding:28px">Webtel portal se official E-Way Bill print fetch ho raha hai...</body>');
