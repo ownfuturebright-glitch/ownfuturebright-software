@@ -1966,7 +1966,7 @@ function saleSave(){
  const isNew=!f.id;
  if(isNew)rec.id=uid();
  if(f.billBlob){rec.hasBill=true;bdbPut(rec.id,f.billBlob)}else if(!isNew){const o0=DB[cur].find(x=>x.id===f.id);if(o0&&o0.hasBill)rec.hasBill=true}
- if(isNew){DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]=rec}
+ if(isNew){DB[cur].push(rec)}else{const i=DB[cur].findIndex(x=>x.id===f.id);DB[cur][i]={...DB[cur][i],...rec}}
  RS.billMsg="";RS.billMiss=[];
  save();const psl=periodSync(rec.date);toast(M[cur].title+" "+rec.inv+" saved"+(psl?" • Register now showing "+psl:""));
  RS.sf=isNew?newSaleForm():null;if(!isNew&&RS.back){cur=RS.back;RS.back=null}render();
@@ -3340,7 +3340,7 @@ function prRun(mode){
 /* Fetch the official Webtel sandbox E-Way Bill Part-B print */
 async function prPortalEwb(rec,k){
  const cached=(rec.edocHistory||[]).find(z=>z.category==="portalPrint"&&z.kind==="ewb"&&z.ok&&z.response&&!/INVALID GSTIN|"IsSuccess"\s*:\s*"false"/i.test(z.response));if(cached){edocOpenSaved(cached.response,"Saved official E-Way Bill print");return}
- const ewbNo=String(rec.ewbNumber||rec.ewbNo||rec.ewayBillNo||"").trim();
+ const ewbNo=String(edocEwbNo(rec)||"").trim();
  if(!/^\d{12}$/.test(ewbNo)){alert("Is invoice me valid 12-digit E-Way Bill Number saved nahi hai. Saved EWB No. check karein: "+(ewbNo||"Not found"));return}
  const c=comp()||{},api=apiCfg();
  // Sandbox GSTIN from the saved sandbox credentials must take priority over the
@@ -3414,7 +3414,7 @@ function edQr(el){
 function printMenu(rec,k){
  if(k!=="sale"){salePrint(rec,k);return}
  const old=rec.id?DB[k].find(x=>x.id===rec.id):null;
- if(old)OFB_EDOC.forEach(f=>{if(rec[f]===undefined&&old[f]!==undefined)rec[f]=old[f]});
+ if(old)Object.keys(old).forEach(f=>{if(rec[f]===undefined&&old[f]!==undefined)rec[f]=old[f]});
  const sd=EDOC_SEED[((comp()||{}).gstin||"")+"|"+(rec.inv||"")];
  if(sd&&!rec.irn){Object.assign(rec,sd);const o=rec.id?DB[k].find(x=>x.id===rec.id):null;if(o){Object.assign(o,sd);save()}}
  RS.pr={rec,k};printMenuDraw();$("pdlg").showModal();
