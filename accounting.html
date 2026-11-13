@@ -999,11 +999,19 @@ RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
 ["l","s"].forEach(e=>{try{RS.hdr[e]=localStorage.getItem("acc_api_hdr_"+e)||"{}"}catch(x){RS.hdr[e]="{}"}});
 function hdrSet(v,e){RS.hdr[e]=v;try{localStorage.setItem("acc_api_hdr_"+e,v)}catch(x){}}
 function ewbLocked(x,live){return !!(x&&edocEwbNo(x)&&(live?x.ewbEnvironment!=="sand":true))}
+function findEwbNo(o,d){d=d||0;if(!o||typeof o!=="object"||d>8)return "";
+ for(const k of Object.keys(o)){const v=o[k];if(v!==null&&typeof v!=="object"&&/(ewb|eway).*(no|num)/i.test(k)&&/^\d{12}$/.test(String(v).trim()))return String(v).trim()}
+ for(const k of Object.keys(o)){const v=o[k];if(v&&typeof v==="object"){const r=findEwbNo(v,d+1);if(r)return r}}return ""}
+function ewbNoFromText(t){const m=String(t||"").match(/(?:ewb|eway)[^0-9]{0,40}?(\d{12})(?!\d)/i);return m?m[1]:""}
+function findEwbLoose(o,d){d=d||0;if(!o||typeof o!=="object"||d>6)return "";
+ for(const k of Object.keys(o)){const v=o[k];if(v!==null&&typeof v!=="object"&&/ewb|eway/i.test(k)&&/^\d{12}$/.test(String(v).trim()))return String(v).trim()}
+ for(const k of Object.keys(o)){const v=o[k];if(v&&typeof v==="object"){const r=findEwbLoose(v,d+1);if(r)return r}}return ""}
 function edocEwbNo(x){
- if(!x)return "";const d=x.ewbNumber||x.ewbNo||x.ewayBillNo||"";if(d)return String(d).trim();
- const pick=r=>{try{const J=JSON.parse(r),n=fany(J,"ewayBillNo")||fany(J,"EwbNo")||fany(J,"ewbNo")||fany(J,"EWBNumber")||fany(J,"EwbNumber");return n?String(n):""}catch(e){return ""}};
+ if(!x)return "";const d=x.ewbNumber||x.ewbNo||x.ewayBillNo||"";if(/^\d{12}$/.test(String(d).trim()))return String(d).trim();
+ const lo=findEwbLoose(x);if(lo)return lo;if(d)return String(d).trim();
+ const pick=r=>{try{const J=JSON.parse(r),n=fany(J,"ewayBillNo")||fany(J,"EwbNo")||fany(J,"ewbNo")||fany(J,"EWBNumber")||fany(J,"EwbNumber")||findEwbNo(J);return n?String(n):ewbNoFromText(r)}catch(e){return ewbNoFromText(r)}};
  let n=pick(x.ewbResponse||"");if(n)return n;
- for(const h of (x.edocHistory||[])){if(h&&h.kind==="ewb"&&(h.action==="gen"||h.action==="genirn")){n=pick(h.response||"");if(n)return n}}
+ for(const h of (x.edocHistory||[])){if(h&&h.ok!==false&&h.category!=="portalPrint"&&/^(gen|gen2|genirn|ewbirn|get)$/.test(h.action||"")&&!/\"IsSuccess\"\s*:\s*\"false\"/i.test(h.response||"")){n=pick(h.response||"");if(n)return n}}
  return ""}
 function ewbNoSet(v){const x=DB.sale.find(z=>z.id===RS.es);if(!x)return;x.ewbNumber=String(v||"").trim();save();render()}
 function apiTpl(kind,act){
@@ -1066,13 +1074,13 @@ function edocOpenSaved(raw,title){
   w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(title)+'</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');w.document.body.textContent=raw;w.document.close();
  }catch(e){w.close();alert("Saved response open nahi ho saka: "+e.message)}
 }
-function edocApply(kind,live,act,body,J,x){
+function edocApply(kind,live,act,body,J,x,raw){
  const out=[];if(!x||!J||typeof J!=="object")return out;
  const g=k=>{const v=fany(J,k);return v===""?"":String(v)};if(/^false$/i.test(g("IsSuccess")))return out;
  const first=(...ks)=>{for(const k of ks){const v=g(k);if(v)return v}return ""};
  const bd=Array.isArray(body)?(body[0]||{}):(body||{}),bf=(...ks)=>{for(const k of ks){const v=fany(bd,k);if(v!=="")return String(v)}return ""};
  const env=live?"live":"sand",now=new Date().toISOString();let gs="";try{gs=bf("Gstin","GSTIN","gstin","userGstin")||comp().gstin||""}catch(e){}
- const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo","EWBNumber","EwbNumber","EWBNo");if(!en)return false;
+ const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo","EWBNumber","EwbNumber","EWBNo")||findEwbNo(J)||ewbNoFromText(raw);if(!en)return false;
   x.ewbNumber=en;x.ewbDate=first("ewayBillDate","EwbDt","EwbDate","ewbDate","EWBDate","EWBDt")||x.ewbDate;x.ewbValidTill=first("validUpto","EwbValidTill","ValidUpto","ewbValidTill","EWBValidTill","ValidTill")||x.ewbValidTill;
   x.ewbGstin=gs||first("SuppGSTIN")||x.ewbGstin;x.ewbEnvironment=env;x.ewbGeneratedAt=now;
   const vn=bf("VehNo","vehicleNo","VehicleNo"),tn=bf("TransName","transporterName","TransporterName"),ds=bf("TransDistance","Distance","distance","approxDistance");
@@ -1107,7 +1115,7 @@ async function apiSend(kind,live){
   const logBill=DB.sale.find(z=>z.id===RS.es);if(logBill)edocLog(logBill,{kind,environment:live?"live":"sandbox",action:a.act,actionName:act[1],url:used||u0,httpStatus:r.status,ok:r.ok,request:edocSafeRequest(body),response:t,responseType:r.headers.get("content-type")||"",category:"api"});
   try{const J=JSON.parse(t),x=DB.sale.find(z=>z.id===RS.es),irn0=findKey(J,"Irn");
    if(irn0&&kind==="einv"&&(a.act==="gen"||a.act==="gen2"))RS.irn=irn0;
-   const sv=edocApply(kind,live,a.act,body,J,x);
+   const sv=edocApply(kind,live,a.act,body,J,x,t);
    if(sv.length&&x){const gE=kind==="ewb"&&(a.act==="gen"||a.act==="genirn"),gI=kind==="einv"&&(a.act==="gen"||a.act==="gen2");if(gE||x.ewbNumber&&gI)x.ewbResponse=t;if(gI)x.irnResponse=t;if(gE||gI)save()}
    if(sv.length)a.resp+="\n\n\u2714 Saved in database on bill "+(x.inv||"")+": "+sv.join(", ")+". Print will now use these details.";
    else if((kind==="einv"&&(a.act==="gen"||a.act==="gen2"))||(kind==="ewb"&&(a.act==="gen"||a.act==="genirn")))a.resp+="\n\n\u26A0 Nothing was saved: no IRN / E-Way Bill number was found in this response.";
