@@ -3356,19 +3356,19 @@ async function prPortalEwb(rec,k){
   if(!/^\d{12}$/.test(ewbNo)){alert("Please enter a valid 12-digit E-Way Bill number.");return}
  }
  if(String(rec.ewbNumber||"").trim()!==ewbNo){rec.ewbNumber=ewbNo;const o2=rec.id?DB.sale.find(z=>z.id===rec.id):null;if(o2){o2.ewbNumber=ewbNo;save()}}
- const c=comp()||{},api=apiCfg();
+ const c=comp()||{},api=apiCfg(),isLive=rec.ewbEnvironment==="live";
  // Sandbox GSTIN from the saved sandbox credentials must take priority over the
  // Company's live GSTIN. Otherwise Webtel validates the live GSTIN against test EWB.
- let cfg={};try{cfg=JSON.parse(api.sandw||"{}")||{}}catch(e){}
- let base={};try{base=JSON.parse(api.sand||"{}")||{}}catch(e){}
- const gstin=String(cfg.GSTIN||cfg.Bill_From_GSTIN||base.GSTIN||base.Bill_From_GSTIN||rec.ewbGstin||c.gstin||"").trim().toUpperCase();
+ let cfg={};try{cfg=isLive?(credEff("ewb",true)||{}):(JSON.parse(api.sandw||"{}")||{})}catch(e){}
+ let base={};try{base=isLive?{}:(JSON.parse(api.sand||"{}")||{})}catch(e){}
+ const gstin=String((isLive?(rec.ewbGstin||cfg.GSTIN||c.gstin):"")||cfg.GSTIN||cfg.Bill_From_GSTIN||base.GSTIN||base.Bill_From_GSTIN||rec.ewbGstin||c.gstin||"").trim().toUpperCase();
  const efUser=cfg.EFUserName||cfg.EFUsername||base.EFUserName||base.EFUsername||"";
  const efPass=cfg.EFPassword||base.EFPassword||"";
  const cdKey=cfg.CDKey||cfg.Cdkey||base.CDKey||base.Cdkey||"";
  const ewbUser=cfg.EWBUserName||cfg.EwbUserName||base.EWBUserName||base.EwbUserName||gstin;
  const ewbPass=cfg.EWBPassword||cfg.EwbPassword||base.EWBPassword||base.EwbPassword||"";
  if(!gstin||!/^\d{2}[A-Z0-9]{13}$/.test(gstin)||!efUser||!efPass||!cdKey||!ewbUser||!ewbPass){
-  alert("Webtel Sandbox credentials incomplete/invalid hain. Other > Webtel API Settings me Sandbox GSTIN (15 characters), CDKey, EFUserName/Password aur EWBUserName/Password check karein. Company Master ka Live GSTIN Sandbox GSTIN se alag ho sakta hai.");return;
+  alert((isLive?"Webtel LIVE":"Webtel Sandbox")+" credentials incomplete/invalid hain. Other > Webtel API Settings me "+(isLive?"Live":"Sandbox")+" GSTIN (15 characters), CDKey, EFUserName/Password aur EWBUserName/Password check karein. Company Master ka Live GSTIN Sandbox GSTIN se alag ho sakta hai.");return;
  }
  const d=String(rec.date||"").match(/^(\d{4})-(\d{2})-/);
  const payload={GSTIN:gstin,ewbNo:ewbNo,Year:String(d?parseInt(d[1],10):new Date().getFullYear()),Month:String(d?parseInt(d[2],10):new Date().getMonth()+1),EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
@@ -3376,14 +3376,16 @@ async function prPortalEwb(rec,k){
  if(!w){alert("Official E-Way Bill print ke liye pop-ups allow karein.");return}
  w.document.write('<!doctype html><title>E-Way Bill</title><body style="font:14px Arial;padding:28px">Webtel portal se official E-Way Bill print fetch ho raha hai...</body>');
  try{
-  const url="http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
-  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  let url=isLive?urlOf("ewbl",ACTS.ewbl.find(z=>z[0]==="prtb")):"http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
+  const up=url.replace(/^http:/i,"https:"),cands=up===url?[url]:(location.protocol==="https:"?[up,url]:[url,up]);
+  let response,lastErr;for(const u of cands){try{response=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});url=u;break}catch(er){lastErr=er}}
+  if(!response)throw lastErr;
   const raw=await response.text();
   if(!response.ok)throw new Error("HTTP "+response.status+" - "+raw.slice(0,1200));
   let data;try{data=JSON.parse(raw)}catch(e){data=raw}
   const result=Array.isArray(data)?data[0]:data;
   const apiSuccess=!!(result&&typeof result==="object"&&(String(result.IsSuccess||result.isSuccess||result.Success||result.success||"").toLowerCase()==="true"));
-  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",url,httpStatus:response.status,ok:apiSuccess,request:edocSafeRequest(payload),response:raw,responseType:response.headers.get("content-type")||"text/plain"});
+  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:isLive?"live":"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",url,httpStatus:response.status,ok:apiSuccess,request:edocSafeRequest(payload),response:raw,responseType:response.headers.get("content-type")||"text/plain"});
   if(result&&typeof result==="object"&&!apiSuccess){
    const msg=result.ErrorMessage||result.errorMessage||"Webtel did not return a successful E-Way Bill print";
    w.document.open();w.document.write('<!doctype html><meta charset="utf-8"><title>E-Way Bill Print Error</title><body style="font:14px Arial;padding:24px"><h3>Official E-Way Bill print failed</h3><p><b>'+esc(msg)+'</b></p><p>GSTIN sent: '+esc(gstin)+'<br>E-Way Bill No. sent: '+esc(ewbNo)+'</p><pre style="white-space:pre-wrap;background:#f5f6fa;padding:12px">'+esc(raw)+'</pre></body>');w.document.close();return;
@@ -3401,7 +3403,7 @@ async function prPortalEwb(rec,k){
   w.document.open();w.document.write('<!doctype html><title>E-Way Bill API Response</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');
   w.document.body.textContent=typeof data==="string"?data:JSON.stringify(data,null,2);w.document.close();
  }catch(err){
-  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",ok:false,response:"Request failed: "+(err.message||err)});
+  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:isLive?"live":"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",ok:false,response:"Request failed: "+(err.message||err)});
   w.close();
   const mixed=location.protocol==="https:"?"\n\nNote: Software HTTPS par open hai aur aapka Webtel URL HTTP hai. Browser mixed-content block kar sakta hai; HTTPS endpoint ya backend proxy chahiye.":"";
   alert("Official E-Way Bill print fetch nahi ho saka.\n"+(err.message||err)+mixed);
