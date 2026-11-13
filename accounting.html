@@ -957,6 +957,7 @@ function edocBuild(kind){
 function edocDl(kind){const r=edocBuild(kind);if(r)dl((kind==="einv"?"einvoice_":"ewaybill_")+r.no+".json",JSON.stringify(r.j,null,2),"application/json")}
 function edocCp(kind){const r=edocBuild(kind);if(r)cpTxt(JSON.stringify(r.j,null,2))}
 async function edocBill(kind,live,id){
+ if(kind==="ewb"&&ewbLocked(DB.sale.find(z=>z.id===id),live)){alert("E-Way Bill is already generated for this bill and saved ("+edocEwbNo(DB.sale.find(z=>z.id===id))+"). Select the bill and use Print / Get Detail instead.");return}
  RS.es=id;RS.api.act=kind==="einv"?"gen2":"gen";
  const check=edocBuild(kind),iss=check?check.iss.filter(i=>!/^Note:/.test(i)):[];
  if(iss.length){render();alert("Please complete the selected bill details first:\n\n"+iss.join("\n"));return}
@@ -969,7 +970,7 @@ function edocPage0(kind,live){
  const E=RS.ew,inp=(k,l,w)=>`<div style="min-width:${w||140}px"><label>${l}</label><input value="${esc(E[k])}" onchange="RS.ew.${k}=this.value;render()"></div>`;
  const bills=`<div style="margin:0 14px 14px;padding:14px;border:1px solid #d8def0;border-radius:10px;background:#fff">
  <b style="font-size:16px">${kind==="einv"?"Select Sale Bill for E-Invoice":"Select Sale Bill for E-Way Bill"}</b>
- <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${kind==="einv"?(s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"):(s.ewbNumber?"<span style='color:#14803c'>EWB saved</span>":"Pending")}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='${kind==="einv"?"gen2":"gen"}';render()">${s.id===RS.es?"Selected":"Select"}</button> <button onclick="edocBill('${kind}',${live?1:0},'${s.id}')">Generate ${kind==="einv"?"E-Invoice":"E-Way Bill"}</button></td></tr>`).join("")}</tbody></table></div></div>`;
+ <div style="overflow:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:650px"><thead><tr style="background:#f1f4fb;text-align:left"><th style="padding:9px">Bill No.</th><th>Date</th><th>Party</th><th style="text-align:right">Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>${DB.sale.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>`<tr style="border-top:1px solid #e5e9f2;${s.id===RS.es?"background:#eef3ff":""}"><td style="padding:9px">${esc(docNo("sale",s))}</td><td>${esc(s.date||"")}</td><td>${esc(lookup("party",s.party))}</td><td style="text-align:right">₹${n2(s.amount)}</td><td>${kind==="einv"?(s.irn?"<span style='color:#14803c'>IRN saved</span>":"Pending"):(edocEwbNo(s)?"<span style='color:#14803c'>EWB "+esc(edocEwbNo(s))+" saved</span>":"Pending")}</td><td><button class="${s.id===RS.es?"g":"e"}" onclick="RS.es='${s.id}';RS.api.act='${kind==="einv"?"gen2":"gen"}';render()">${s.id===RS.es?"Selected":"Select"}</button> ${kind==="ewb"&&ewbLocked(s,live)?`<button disabled style="opacity:.6;cursor:not-allowed" title="E-Way Bill already generated and saved">\u2714 Generated</button>`:`<button onclick="edocBill('${kind}',${live?1:0},'${s.id}')">Generate ${kind==="einv"?"E-Invoice":"E-Way Bill"}</button>`}</td></tr>`).join("")}</tbody></table></div></div>`;
  const ewbToggle=kind==="einv"?`<div style="margin:0 14px 12px;padding:12px 14px;border:1px solid #c9d3f5;border-radius:9px;background:#f5f8ff"><label style="display:flex;align-items:center;gap:9px;font-weight:700;cursor:pointer"><input type="checkbox" ${E.einvEwb?"checked":""} onchange="RS.ew.einvEwb=this.checked;render()" style="width:17px;height:17px"> E-Invoice के साथ E-Way Bill भी बनाना है?</label><div style="font-size:12px;color:#65708a;margin:5px 0 0 26px">Tick करने पर E-Invoice JSON में EwbDtls भी शामिल होगा। Untick करने पर केवल E-Invoice details भेजी जाएँगी।</div>${E.einvEwb?`<div class="ctl" style="padding:10px 0 0">${inp("dist","E-Way Bill Distance (km)",130)}${inp("veh","Vehicle No.",140)}${inp("tname","Transporter Name",160)}${inp("tid","Transporter ID (GSTIN)",170)}${inp("transDocNo","Transport Document No.",160)}${inp("transDocDt","Transport Document Date",150)}<div style="min-width:140px"><label>Transport Mode</label><select onchange="RS.ew.transMode=this.value;render()"><option value="1" ${E.transMode==="1"?"selected":""}>1 - Road</option><option value="2" ${E.transMode==="2"?"selected":""}>2 - Rail</option><option value="3" ${E.transMode==="3"?"selected":""}>3 - Air</option><option value="4" ${E.transMode==="4"?"selected":""}>4 - Ship</option></select></div><div style="min-width:120px"><label>Vehicle Type</label><select onchange="RS.ew.vehType=this.value;render()"><option value="R" ${E.vehType==="R"?"selected":""}>Regular</option><option value="O" ${E.vehType==="O"?"selected":""}>Over Dimensional Cargo</option></select></div></div>`:""}</div>`:"";
  const ctl=`<div class="ctl"><div style="min-width:260px"><label>Selected Sale Entry</label><input readonly value="${esc(docNo("sale",x0))} • ${esc(lookup("party",x0.party))} • ₹${n2(x0.amount)}"></div>${kind==="ewb"?inp("dist","Distance (km)",100)+inp("veh","Vehicle No")+inp("tname","Transporter Name")+inp("tid","Transporter ID (GSTIN)",170):""}</div>`;
  const r=edocBuild(kind),url=PORT[kind][live?"live":"sand"],nm=kind==="einv"?"E-Invoice":"E-Way Bill";
@@ -986,20 +987,21 @@ R.ewblive={t:"E-Way Bill Live",f:()=>edocPage("ewb",1)};
 
 /* ===== Webtel API console (Sandbox + Live) ===== */
 const EV="http://einvlive.webtel.in/v1.03/",EW="http://ewayasp.webtel.in/EWayBill/v1.3/";
-const SV="http://einvSandbox.webtel.in/v1.03/",SW="http://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/",SP="http://service.webtel.in/printewaysandbox/v1.3/";
+const SV="http://einvSandbox.webtel.in/v1.03/",SW="http://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/",SP="http://service.webtel.in/printewaysandbox/v1.3/",SPL="http://service.webtel.in/printeway/v1.3/";
 const ACTS={
  einvl:[["gen","Generate E-Invoice (IRN)",EV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",EV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",EV+"CanIRN"],["prt","Print E-Invoice by IRN",EV+"PrintEInvByIRN"],["ewbirn","Generate e-Way Bill by IRN",EV+"GenEWaybyIRN"]],
  einvs:[["gen","Generate E-Invoice (IRN) - Linear",SV+"GenIRN"],["gen2","Generate E-Invoice - Tree format",SV+"GenIRN2"],["can","Cancel E-Invoice (IRN)",SV+"CanIRN"],["prt","Print E-Invoice by IRN",SV+"PrintEInvByIRN"]],
- ewbl:[["prtb","E-Way Bill Print Part-B (Details)",SP+"PrintEWBDetail2"],["gen","Generate E-way Bill",EW+"GenEWB"],["genirn","Generate E-way Bill by IRN",EW+"GenEWaybyIRN"],["prta","E-Way Bill Print Part-A (Summary)",SP+"PrintEWB2"],["veh","Update Vehicle Number",EW+"UpdateVehicle"],["can","Cancel E-way Bill",EW+"CancelEWB"],["rej","Reject E-way Bill",EW+"RejectEWB"],["con","Consolidated E-Way Bill",EW+"GenConsolidatedEWB"],["get","Get E-way Bill Detail",EW+"GetEWB"],["tr","Update Transporter Id",EW+"UpdateTransporter"],["ext","Extend Validity",EW+"ExtendValidity"]],
+ ewbl:[["prtb","E-Way Bill Print Part-B (Details)",SPL+"PrintEWBDetail2"],["gen","Generate E-way Bill",EW+"GenEWB"],["genirn","Generate E-way Bill by IRN",EW+"GenEWaybyIRN"],["prta","E-Way Bill Print Part-A (Summary)",SPL+"PrintEWB2"],["veh","Update Vehicle Number",EW+"UpdateVehicle"],["can","Cancel E-way Bill",EW+"CancelEWB"],["rej","Reject E-way Bill",EW+"RejectEWB"],["con","Consolidated E-Way Bill",EW+"GenConsolidatedEWB"],["get","Get E-way Bill Detail",EW+"GetEWB"],["tr","Update Transporter Id",EW+"UpdateTransporter"],["ext","Extend Validity",EW+"ExtendValidity"]],
  gstin:[["det","GSTIN Details (Party Master GSTIN Validate)",EV+"GetGSTINDetails"]],
  ewbs:[["gen","Generate E-way Bill","https://ewaysandbox.webtel.in/Sandbox/EWayBill/v1.3/GenEWB"],["genirn","Generate E-way Bill by IRN",SW+"GenEWaybyIRN"],["prt","Print Part-A (Summary)",SP+"PrintEWB2"],["prtd","Print Part-B (Details)",SP+"PrintEWBDetail2"],["can","Cancel E-way Bill",SW+"CancelEWB"],["veh","Update Vehicle Number",SW+"UpdateVehicle"],["ext","Extend Validity",SW+"ExtendValidity"]]
 };
 RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
 ["l","s"].forEach(e=>{try{RS.hdr[e]=localStorage.getItem("acc_api_hdr_"+e)||"{}"}catch(x){RS.hdr[e]="{}"}});
 function hdrSet(v,e){RS.hdr[e]=v;try{localStorage.setItem("acc_api_hdr_"+e,v)}catch(x){}}
+function ewbLocked(x,live){return !!(x&&edocEwbNo(x)&&(live?x.ewbEnvironment!=="sand":true))}
 function edocEwbNo(x){
  if(!x)return "";const d=x.ewbNumber||x.ewbNo||x.ewayBillNo||"";if(d)return String(d).trim();
- const pick=r=>{try{const J=JSON.parse(r),n=fany(J,"ewayBillNo")||fany(J,"EwbNo")||fany(J,"ewbNo");return n?String(n):""}catch(e){return ""}};
+ const pick=r=>{try{const J=JSON.parse(r),n=fany(J,"ewayBillNo")||fany(J,"EwbNo")||fany(J,"ewbNo")||fany(J,"EWBNumber")||fany(J,"EwbNumber");return n?String(n):""}catch(e){return ""}};
  let n=pick(x.ewbResponse||"");if(n)return n;
  for(const h of (x.edocHistory||[])){if(h&&h.kind==="ewb"&&(h.action==="gen"||h.action==="genirn")){n=pick(h.response||"");if(n)return n}}
  return ""}
@@ -1066,12 +1068,13 @@ function edocOpenSaved(raw,title){
 }
 function edocApply(kind,live,act,body,J,x){
  const out=[];if(!x||!J||typeof J!=="object")return out;
- const g=k=>{const v=fany(J,k);return v===""?"":String(v)},first=(...ks)=>{for(const k of ks){const v=g(k);if(v)return v}return ""};
+ const g=k=>{const v=fany(J,k);return v===""?"":String(v)};if(/^false$/i.test(g("IsSuccess")))return out;
+ const first=(...ks)=>{for(const k of ks){const v=g(k);if(v)return v}return ""};
  const bd=Array.isArray(body)?(body[0]||{}):(body||{}),bf=(...ks)=>{for(const k of ks){const v=fany(bd,k);if(v!=="")return String(v)}return ""};
  const env=live?"live":"sand",now=new Date().toISOString();let gs="";try{gs=bf("Gstin","GSTIN","gstin","userGstin")||comp().gstin||""}catch(e){}
- const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo");if(!en)return false;
-  x.ewbNumber=en;x.ewbDate=first("ewayBillDate","EwbDt","EwbDate","ewbDate")||x.ewbDate;x.ewbValidTill=first("validUpto","EwbValidTill","ValidUpto","ewbValidTill")||x.ewbValidTill;
-  x.ewbGstin=gs||x.ewbGstin;x.ewbEnvironment=env;x.ewbGeneratedAt=now;
+ const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo","EWBNumber","EwbNumber","EWBNo");if(!en)return false;
+  x.ewbNumber=en;x.ewbDate=first("ewayBillDate","EwbDt","EwbDate","ewbDate","EWBDate","EWBDt")||x.ewbDate;x.ewbValidTill=first("validUpto","EwbValidTill","ValidUpto","ewbValidTill","EWBValidTill","ValidTill")||x.ewbValidTill;
+  x.ewbGstin=gs||first("SuppGSTIN")||x.ewbGstin;x.ewbEnvironment=env;x.ewbGeneratedAt=now;
   const vn=bf("VehNo","vehicleNo","VehicleNo"),tn=bf("TransName","transporterName","TransporterName"),ds=bf("TransDistance","Distance","distance","approxDistance");
   if(vn)x.vehicleNo=vn;if(tn)x.transporterName=tn;if(ds)x.distance=ds;out.push("E-Way Bill "+en);return true};
  if(kind==="einv"&&(act==="gen"||act==="gen2")){
@@ -1088,6 +1091,7 @@ function edocApply(kind,live,act,body,J,x){
  return out}
 async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
+ if(kind==="ewb"&&(a.act==="gen"||a.act==="genirn")&&ewbLocked(DB.sale.find(z=>z.id===RS.es),live)){alert("E-Way Bill is already generated for this bill and saved ("+edocEwbNo(DB.sale.find(z=>z.id===RS.es))+"). It cannot be generated again.");return}
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
  const C=apiCfg(),cr=credEff(kind,live);if(cr===null){alert("The credentials in Webtel API Settings are not valid JSON");return}
  h={};if(C.mode==="headers")h=cr;else if(!Array.isArray(body))body=ewbPush({...body,...cr});
