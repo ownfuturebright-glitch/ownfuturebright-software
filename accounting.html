@@ -3340,8 +3340,14 @@ function prRun(mode){
 /* Fetch the official Webtel sandbox E-Way Bill Part-B print */
 async function prPortalEwb(rec,k){
  const cached=(rec.edocHistory||[]).find(z=>z.category==="portalPrint"&&z.kind==="ewb"&&z.ok&&z.response&&!/INVALID GSTIN|"IsSuccess"\s*:\s*"false"/i.test(z.response));if(cached){edocOpenSaved(cached.response,"Saved official E-Way Bill print");return}
- const ewbNo=String(edocEwbNo(rec)||"").trim();
- if(!/^\d{12}$/.test(ewbNo)){alert("Is invoice me valid 12-digit E-Way Bill Number saved nahi hai. Saved EWB No. check karein: "+(ewbNo||"Not found"));return}
+ let ewbNo=String(edocEwbNo(rec)||"").trim();
+ if(!/^\d{12}$/.test(ewbNo)){const sm=DB.sale.find(z=>z.inv&&z.inv===rec.inv&&/^\d{12}$/.test(String(edocEwbNo(z)||"").trim()));if(sm)ewbNo=String(edocEwbNo(sm)).trim()}
+ if(!/^\d{12}$/.test(ewbNo)){
+  const v=prompt("No E-Way Bill number is saved on this invoice.\nEnter the 12-digit E-Way Bill No. (it will be saved on this bill for next time):","");
+  if(v===null)return;ewbNo=String(v).replace(/\D/g,"");
+  if(!/^\d{12}$/.test(ewbNo)){alert("Please enter a valid 12-digit E-Way Bill number.");return}
+ }
+ if(String(rec.ewbNumber||"").trim()!==ewbNo){rec.ewbNumber=ewbNo;const o2=rec.id?DB.sale.find(z=>z.id===rec.id):null;if(o2){o2.ewbNumber=ewbNo;save()}}
  const c=comp()||{},api=apiCfg();
  // Sandbox GSTIN from the saved sandbox credentials must take priority over the
  // Company's live GSTIN. Otherwise Webtel validates the live GSTIN against test EWB.
