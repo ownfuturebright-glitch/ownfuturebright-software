@@ -1055,6 +1055,28 @@ function edocOpenSaved(raw,title){
   w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(title)+'</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');w.document.body.textContent=raw;w.document.close();
  }catch(e){w.close();alert("Saved response open nahi ho saka: "+e.message)}
 }
+function edocApply(kind,live,act,body,J,x){
+ const out=[];if(!x||!J||typeof J!=="object")return out;
+ const g=k=>{const v=fany(J,k);return v===""?"":String(v)},first=(...ks)=>{for(const k of ks){const v=g(k);if(v)return v}return ""};
+ const bd=Array.isArray(body)?(body[0]||{}):(body||{}),bf=(...ks)=>{for(const k of ks){const v=fany(bd,k);if(v!=="")return String(v)}return ""};
+ const env=live?"live":"sand",now=new Date().toISOString();let gs="";try{gs=bf("Gstin","GSTIN","gstin","userGstin")||comp().gstin||""}catch(e){}
+ const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo");if(!en)return false;
+  x.ewbNumber=en;x.ewbDate=first("ewayBillDate","EwbDt","EwbDate","ewbDate")||x.ewbDate;x.ewbValidTill=first("validUpto","EwbValidTill","ValidUpto","ewbValidTill")||x.ewbValidTill;
+  x.ewbGstin=gs||x.ewbGstin;x.ewbEnvironment=env;x.ewbGeneratedAt=now;
+  const vn=bf("VehNo","vehicleNo","VehicleNo"),tn=bf("TransName","transporterName","TransporterName"),ds=bf("TransDistance","Distance","distance","approxDistance");
+  if(vn)x.vehicleNo=vn;if(tn)x.transporterName=tn;if(ds)x.distance=ds;out.push("E-Way Bill "+en);return true};
+ if(kind==="einv"&&(act==="gen"||act==="gen2")){
+  const irn=first("Irn","irn");if(!irn)return out;
+  x.irn=irn;x.irnEnvironment=env;x.irnGeneratedAt=now;x.irnGstin=gs||x.irnGstin;
+  x.ackNo=first("AckNo","ackNo")||x.ackNo;x.ackDate=first("AckDt","AckDate","ackDate")||x.ackDate;
+  x.qrCodeImage=first("QRCodeImage","qrCodeImage")||x.qrCodeImage;x.signedQrCode=first("SignedQRCode","signedQrCode")||x.signedQrCode;
+  x.signedInvoice=first("SignedInvoice","signedInvoice")||x.signedInvoice;
+  out.push("IRN "+irn.slice(0,12)+"...");ewbFrom();save();return out}
+ if(kind==="ewb"&&(act==="gen"||act==="genirn")){if(ewbFrom())save();return out}
+ if(kind==="ewb"&&act==="veh"){const vn=bf("VehNo","vehicleNo","VehicleNo"),vt=first("validUpto","EwbValidTill","ValidUpto");
+  if(!vn&&!vt)return out;if(vn){x.vehicleNo=vn;out.push("Vehicle "+vn)}if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt)}save();return out}
+ if(kind==="ewb"&&act==="ext"){const vt=first("validUpto","EwbValidTill","ValidUpto","updatedDate");if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt);save()}return out}
+ return out}
 async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
@@ -1069,10 +1091,11 @@ async function apiSend(kind,live){
   if(!r){lastErr.tried=cands;throw lastErr}
   const t=await r.text();a.resp="HTTP "+r.status+(used!==u0?"  (sent to "+used+")":"")+"\n"+t;
   const logBill=DB.sale.find(z=>z.id===RS.es);if(logBill)edocLog(logBill,{kind,environment:live?"live":"sandbox",action:a.act,actionName:act[1],url:used||u0,httpStatus:r.status,ok:r.ok,request:edocSafeRequest(body),response:t,responseType:r.headers.get("content-type")||"",category:"api"});
-  try{const J=JSON.parse(t),fa=k=>{const v=fany(J,k);return v===""?"":String(v)},irn=findKey(J,"Irn"),x=DB.sale.find(z=>z.id===RS.es);
-   if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;if(x){x.irn=irn;x.irnEnvironment=live?"live":"sand";x.irnGeneratedAt=new Date().toISOString();x.ackNo=fa("AckNo")||x.ackNo;x.ackDate=fa("AckDt")||x.ackDate;x.qrCodeImage=fa("QRCodeImage")||fa("qrCodeImage")||x.qrCodeImage;x.signedQrCode=fa("SignedQRCode")||x.signedQrCode;save()}}
-   const en=fa("ewayBillNo")||fa("EwbNo")||fa("ewbNo");
-   if(en&&kind==="ewb"&&x&&(a.act==="gen"||a.act==="genirn")){x.ewbNumber=en;x.ewbDate=fa("ewayBillDate")||fa("EwbDt")||x.ewbDate;x.ewbValidTill=fa("validUpto")||fa("EwbValidTill")||x.ewbValidTill;save()}
+  try{const J=JSON.parse(t),x=DB.sale.find(z=>z.id===RS.es),irn0=findKey(J,"Irn");
+   if(irn0&&kind==="einv"&&(a.act==="gen"||a.act==="gen2"))RS.irn=irn0;
+   const sv=edocApply(kind,live,a.act,body,J,x);
+   if(sv.length)a.resp+="\n\n\u2714 Saved in database on bill "+(x.inv||"")+": "+sv.join(", ")+". Print will now use these details.";
+   else if((kind==="einv"&&(a.act==="gen"||a.act==="gen2"))||(kind==="ewb"&&(a.act==="gen"||a.act==="genirn")))a.resp+="\n\n\u26A0 Nothing was saved: no IRN / E-Way Bill number was found in this response.";
   }catch(x){}
  }catch(x){
   const u=(x.tried||[urlOf(kind+e,act)]).join("  and  "),hint=[];
