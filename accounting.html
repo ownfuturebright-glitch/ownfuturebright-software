@@ -997,8 +997,15 @@ const ACTS={
 RS.api={act:"gen",body:"",resp:"",sig:""};RS.irn="";RS.hdr={};
 ["l","s"].forEach(e=>{try{RS.hdr[e]=localStorage.getItem("acc_api_hdr_"+e)||"{}"}catch(x){RS.hdr[e]="{}"}});
 function hdrSet(v,e){RS.hdr[e]=v;try{localStorage.setItem("acc_api_hdr_"+e,v)}catch(x){}}
+function edocEwbNo(x){
+ if(!x)return "";const d=x.ewbNumber||x.ewbNo||x.ewayBillNo||"";if(d)return String(d).trim();
+ const pick=r=>{try{const J=JSON.parse(r),n=fany(J,"ewayBillNo")||fany(J,"EwbNo")||fany(J,"ewbNo");return n?String(n):""}catch(e){return ""}};
+ let n=pick(x.ewbResponse||"");if(n)return n;
+ for(const h of (x.edocHistory||[])){if(h&&h.kind==="ewb"&&(h.action==="gen"||h.action==="genirn")){n=pick(h.response||"");if(n)return n}}
+ return ""}
+function ewbNoSet(v){const x=DB.sale.find(z=>z.id===RS.es);if(!x)return;x.ewbNumber=String(v||"").trim();save();render()}
 function apiTpl(kind,act){
- const sx=DB.sale.find(z=>z.id===RS.es)||{},dm=String(sx.date||"").match(/^(\d{4})-(\d{2})-/),en=sx.ewbNumber||"",pb={GSTIN:sx.ewbGstin||(comp().gstin||""),ewbNo:en,Year:String(dm?+dm[1]:new Date().getFullYear()),Month:String(dm?+dm[2]:new Date().getMonth()+1)};
+ const sx=DB.sale.find(z=>z.id===RS.es)||{},dm=String(sx.date||"").match(/^(\d{4})-(\d{2})-/),en=edocEwbNo(sx),pb={GSTIN:sx.ewbGstin||(comp().gstin||""),ewbNo:en,Year:String(dm?+dm[1]:new Date().getFullYear()),Month:String(dm?+dm[2]:new Date().getMonth()+1)};
  const ewbIrn={Irn:RS.irn||"",TransId:"",TransMode:"1",TransDocNo:"",TransDocDt:"",VehNo:"",Distance:0,VehType:"R",TransName:""};
  const T={einv:{can:{Irn:RS.irn||"",CnlRsn:"1",CnlRem:"Data entry mistake"},prt:{Irn:RS.irn||""},ewbirn:ewbIrn},
   ewb:{genirn:ewbIrn,prt:pb,prtd:pb,prta:pb,prtb:pb,veh:{ewbNo:en,vehicleNo:"",fromPlace:"",fromState:0,reasonCode:"1",reasonRem:"",transDocNo:"",transDocDate:"",transMode:"1",vehicleType:"R"},
@@ -1021,7 +1028,7 @@ function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
  if(a.pk!==kind+e){a.pk=kind+e;a.act=kind==="einv"?"gen2":"gen"}
  if(!L.some(z=>z[0]===a.act))a.act="gen";
- const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+((DB.sale.find(z=>z.id===RS.es)||{}).ewbNumber||"")+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
+ const C0=apiCfg(),cr0=credEff(kind,live),sig=kind+e+a.act+RS.es+RS.irn+edocEwbNo(DB.sale.find(z=>z.id===RS.es))+JSON.stringify(RS.ew)+C0.mode+JSON.stringify(cr0);
  if(a.sig!==sig){a.sig=sig;a.body=apiBodyFor(kind,live)}
  const act=L.find(z=>z[0]===a.act);
  return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
@@ -1030,6 +1037,7 @@ function apiPanel(kind,live){
  <div style="font-size:12px;color:#6b7690;margin-top:10px">POST → ${esc(urlOf(kind+e,act))}</div>
  <div style="font-size:12px;color:#6b7690;margin-top:8px">Credentials: ${credInfo(kind,e)} (change it in Other → Webtel API Settings)${live?"":`<br>Sandbox seller GSTIN: <b>${esc(sbxFor(comp())||"State Code missing")}</b>${apiCfg().sbuyer?" • Test buyer GSTIN: <b>"+esc(apiCfg().sbuyer)+"</b>":""}`}</div>
  <label>IRN (filled in automatically after generating)</label><input value="${esc(RS.irn)}" onchange="RS.irn=this.value;render()">
+ ${kind==="ewb"?`<label>E-Way Bill No. (saved on this bill; used in Print / Get / Cancel etc.)</label><input value="${esc(edocEwbNo(DB.sale.find(z=>z.id===RS.es)))}" onchange="ewbNoSet(this.value)">`:""}
  <label>Request body (JSON, editable)</label><textarea rows="10" style="font-family:monospace;font-size:12px" oninput="RS.api.body=this.value">${esc(a.body)}</textarea>
  <div class="btns" style="justify-content:flex-start"><button onclick="apiSend('${kind}',${live?1:0})">Send to ${live?"Live":"Sandbox"} API</button></div>
  ${a.resp?`<pre style="margin:10px 0 0;padding:12px;background:#0f1a3a;color:#d7ffe0;border-radius:8px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap">${esc(a.resp)}</pre>`:""}
@@ -1091,6 +1099,7 @@ async function apiSend(kind,live){
   for(const u of cands){try{r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json",...h},body:JSON.stringify(body)});used=u;break}catch(er){lastErr=er}}
   if(!r){lastErr.tried=cands;throw lastErr}
   const t=await r.text();a.resp="HTTP "+r.status+(used!==u0?"  (sent to "+used+")":"")+"\n"+t;
+  if(live&&/sandbox/i.test(used||u0))a.resp+="\n\n\u26A0 This is a LIVE operation but the URL above is a Sandbox URL, so live credentials will be rejected (Invalid login credentials). Put the Webtel LIVE print URL in Other \u2192 API URL Settings \u2192 E-Way Bill Live \u2192 Print Part-B (Details), save it, and send again.";
   const logBill=DB.sale.find(z=>z.id===RS.es);if(logBill)edocLog(logBill,{kind,environment:live?"live":"sandbox",action:a.act,actionName:act[1],url:used||u0,httpStatus:r.status,ok:r.ok,request:edocSafeRequest(body),response:t,responseType:r.headers.get("content-type")||"",category:"api"});
   try{const J=JSON.parse(t),x=DB.sale.find(z=>z.id===RS.es),irn0=findKey(J,"Irn");
    if(irn0&&kind==="einv"&&(a.act==="gen"||a.act==="gen2"))RS.irn=irn0;
