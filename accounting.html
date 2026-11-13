@@ -3378,9 +3378,15 @@ async function prPortalEwb(rec,k){
  try{
   let url=isLive?urlOf("ewbl",ACTS.ewbl.find(z=>z[0]==="prtb")):"http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
   const up=url.replace(/^http:/i,"https:"),cands=up===url?[url]:(location.protocol==="https:"?[up,url]:[url,up]);
-  let response,lastErr;for(const u of cands){try{response=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});url=u;break}catch(er){lastErr=er}}
+  let response,rawT="",lastErr;
+  for(const u of cands){
+   try{w.document.body.textContent="Fetching E-Way Bill print from "+u+" ..."}catch(e){}
+   const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),20000);
+   try{response=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),signal:ac.signal});rawT=await response.text();clearTimeout(tm);url=u;break}
+   catch(er){clearTimeout(tm);response=null;lastErr=er&&er.name==="AbortError"?new Error("Timed out after 20 seconds on "+u):er}
+  }
   if(!response)throw lastErr;
-  const raw=await response.text();
+  const raw=rawT;
   if(!response.ok)throw new Error("HTTP "+response.status+" - "+raw.slice(0,1200));
   let data;try{data=JSON.parse(raw)}catch(e){data=raw}
   const result=Array.isArray(data)?data[0]:data;
