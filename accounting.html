@@ -1034,6 +1034,27 @@ function apiPanel(kind,live){
  ${a.resp?`<pre style="margin:10px 0 0;padding:12px;background:#0f1a3a;color:#d7ffe0;border-radius:8px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap">${esc(a.resp)}</pre>`:""}
  <div style="font-size:12px;color:#b26a00;margin-top:10px">${live?"⚠ This is the LIVE API. Sending creates or changes a real document. ":"Sandbox is for testing only. "}Match the exact request format and login details with the Webtel documentation. Most URLs are http, not https, so credentials travel without encryption. Credentials stay saved in your browser. The browser may block the request because of CORS.</div></div>`;
 }
+function edocLog(rec,entry){
+ if(!rec)return;rec.edocHistory=Array.isArray(rec.edocHistory)?rec.edocHistory:[];
+ rec.edocHistory.unshift({id:"edoc_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),at:new Date().toISOString(),...entry});
+ rec.edocHistory=rec.edocHistory.slice(0,30);save();
+}
+function edocSafeRequest(obj){const x=JSON.parse(JSON.stringify(obj||{}));const hide=k=>/password|cdkey|token|secret|authorization/i.test(k);const walk=o=>{if(!o||typeof o!=="object")return;Object.keys(o).forEach(k=>{if(hide(k))o[k]="[HIDDEN]";else walk(o[k])})};walk(x);return x}
+function edocOpenSaved(raw,title){
+ const w=window.open("","_blank");if(!w){alert("Saved print kholne ke liye pop-ups allow karein.");return}
+ try{let J;try{J=JSON.parse(raw)}catch(e){J=null}
+  const find=(o,test)=>{if(typeof o==="string")return test(o)?o:"";if(o&&typeof o==="object")for(const v of Object.values(o)){const z=find(v,test);if(z)return z}return ""};
+  const html=(typeof raw==="string"&&/^\s*(<!doctype html|<html)/i.test(raw))?raw:find(J,v=>/^\s*(<!doctype html|<html)/i.test(v));
+  const pdf=find(J,v=>/^JVBERi0/.test(String(v).trim()));
+  if(html){w.document.open();w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),500);return}
+  if(pdf){w.location.href=URL.createObjectURL(prB64Blob(pdf,"application/pdf"));return}
+  if(J&&typeof J==="object"){
+   const u=find(J,v=>/^https?:\/\/\S+$/i.test(String(v).trim())&&/pdf|print|download/i.test(v));if(u){w.location.href=u;return}
+  }
+  if(/^JVBER/.test(String(raw).trim())){w.location.href=URL.createObjectURL(prB64Blob(String(raw).trim(),"application/pdf"));return}
+  w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(title)+'</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');w.document.body.textContent=raw;w.document.close();
+ }catch(e){w.close();alert("Saved response open nahi ho saka: "+e.message)}
+}
 async function apiSend(kind,live){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
@@ -1047,6 +1068,7 @@ async function apiSend(kind,live){
   for(const u of cands){try{r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json",...h},body:JSON.stringify(body)});used=u;break}catch(er){lastErr=er}}
   if(!r){lastErr.tried=cands;throw lastErr}
   const t=await r.text();a.resp="HTTP "+r.status+(used!==u0?"  (sent to "+used+")":"")+"\n"+t;
+  const logBill=DB.sale.find(z=>z.id===RS.es);if(logBill)edocLog(logBill,{kind,environment:live?"live":"sandbox",action:a.act,actionName:act[1],url:used||u0,httpStatus:r.status,ok:r.ok,request:edocSafeRequest(body),response:t,responseType:r.headers.get("content-type")||"",category:"api"});
   try{const J=JSON.parse(t),fa=k=>{const v=fany(J,k);return v===""?"":String(v)},irn=findKey(J,"Irn"),x=DB.sale.find(z=>z.id===RS.es);
    if(irn&&kind==="einv"&&(a.act==="gen"||a.act==="gen2")){RS.irn=irn;if(x){x.irn=irn;x.irnEnvironment=live?"live":"sand";x.irnGeneratedAt=new Date().toISOString();x.ackNo=fa("AckNo")||x.ackNo;x.ackDate=fa("AckDt")||x.ackDate;x.qrCodeImage=fa("QRCodeImage")||fa("qrCodeImage")||x.qrCodeImage;x.signedQrCode=fa("SignedQRCode")||x.signedQrCode;save()}}
    const en=fa("ewayBillNo")||fa("EwbNo")||fa("ewbNo");
@@ -1059,6 +1081,7 @@ async function apiSend(kind,live){
   if(location.protocol==="file:")hint.push("• This page is opened as a local file, so the browser sends the origin as \"null\". Webtel must allow all origins (Access-Control-Allow-Origin: *) for this to work.");
   hint.push("• The API server must reply to the browser's pre-check (OPTIONS) with CORS headers allowing Content-Type"+(C.mode==="headers"?" and your credential headers":"")+". If it does not, ask Webtel to enable CORS for this page's origin.");
   hint.push("• If Webtel cannot enable CORS, call the API through a small backend or proxy.");
+  const failedBill=DB.sale.find(z=>z.id===RS.es);if(failedBill)edocLog(failedBill,{kind,environment:live?"live":"sandbox",action:a.act,actionName:act[1],url:u,httpStatus:0,ok:false,request:edocSafeRequest(body),response:"Request failed: "+x.message,category:"api"});
   a.resp="Request failed: "+x.message+"\nTried URL: "+u+"\nPage address: "+location.protocol+"//"+(location.host||"(local file)")+"\n\nPossible reasons:\n"+hint.join("\n")}
  render();
 }
@@ -1965,6 +1988,7 @@ async function prPortal(rec,k){
  const w=window.open("","_blank");if(!w){alert("Please allow pop-ups to print");return}
  w.document.write('<!doctype html><title>e-Invoice</title><body style="font-family:Arial;padding:30px;color:#334">Fetching the official e-Invoice print from Webtel (PrintEInvByIRN)...</body>');
  const live=rec.irnEnvironment!=="sand",e=live?"l":"s",kind="einv";
+ const cached=(rec.edocHistory||[]).find(z=>z.category==="portalPrint"&&z.kind==="einv"&&z.ok&&z.response);if(cached){edocOpenSaved(cached.response,"Saved official e-Invoice print");return}
  const fail=(msg,raw)=>{
   w.document.open();
   w.document.write('<!doctype html><meta charset="utf-8"><title>e-Invoice</title><body style="font-family:Arial;padding:24px;color:#222"><div style="padding:12px 14px;background:#fff4e5;border:1px solid #f0c27a;border-radius:8px"><b>Could not get the official e-Invoice print.</b><div style="margin-top:6px;white-space:pre-wrap">'+esc(msg)+'</div></div>'+(raw?'<pre style="margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#f6f7fb;padding:10px;border-radius:8px;font-size:12px;max-height:50vh;overflow:auto">'+esc(raw.slice(0,4000))+'</pre>':'')+'<button id="lb" style="margin-top:16px;padding:10px 16px">Open local e-Invoice print instead</button></body>');
@@ -1981,7 +2005,7 @@ async function prPortal(rec,k){
   if(!r){fail("Request failed: "+(lastErr&&lastErr.message)+"\nTried: "+cands.join("  and  ")+"\nThe Webtel server must allow this page (CORS), and an https page cannot call an http URL.");return}
   const ct=(r.headers.get("content-type")||"").toLowerCase();
   if(/pdf/.test(ct)){const b=await r.blob();w.location.href=URL.createObjectURL(new Blob([b],{type:"application/pdf"}));return}
-  const t=await r.text();let J=null;try{J=JSON.parse(t)}catch(x){}
+  const t=await r.text();edocLog(rec,{category:"portalPrint",kind:"einv",environment:live?"live":"sandbox",action:"prt",actionName:"Official e-Invoice portal print",url:u0,httpStatus:r.status,ok:r.ok,request:edocSafeRequest(body),response:t,responseType:ct||"text/plain"});let J=null;try{J=JSON.parse(t)}catch(x){}
   if(J===null){
    if(/^\s*(<!doctype|<html)/i.test(t)){w.document.open();w.document.write(t);w.document.close();w.focus();setTimeout(()=>w.print(),600);return}
    if(/^JVBER/.test(t.trim())){w.location.href=URL.createObjectURL(prB64Blob(t.trim(),"application/pdf"));return}
@@ -3277,22 +3301,25 @@ function prRun(mode){
 
 /* Fetch the official Webtel sandbox E-Way Bill Part-B print */
 async function prPortalEwb(rec,k){
- const ewbNo=String(rec.ewbNumber||rec.ewbNo||"").trim();
- if(!ewbNo){alert("Is invoice me E-Way Bill Number saved nahi hai. Pehle E-Way Bill generate karke invoice save karein.");return}
+ const cached=(rec.edocHistory||[]).find(z=>z.category==="portalPrint"&&z.kind==="ewb"&&z.ok&&z.response&&!/INVALID GSTIN|"IsSuccess"\s*:\s*"false"/i.test(z.response));if(cached){edocOpenSaved(cached.response,"Saved official E-Way Bill print");return}
+ const ewbNo=String(rec.ewbNumber||rec.ewbNo||rec.ewayBillNo||"").trim();
+ if(!/^\d{12}$/.test(ewbNo)){alert("Is invoice me valid 12-digit E-Way Bill Number saved nahi hai. Saved EWB No. check karein: "+(ewbNo||"Not found"));return}
  const c=comp()||{},api=apiCfg();
+ // Sandbox GSTIN from the saved sandbox credentials must take priority over the
+ // Company's live GSTIN. Otherwise Webtel validates the live GSTIN against test EWB.
  let cfg={};try{cfg=JSON.parse(api.sandw||"{}")||{}}catch(e){}
  let base={};try{base=JSON.parse(api.sand||"{}")||{}}catch(e){}
- const gstin=String(c.gstin||cfg.GSTIN||base.GSTIN||"").trim();
- const efUser=cfg.EFUserName||base.EFUserName||gstin;
+ const gstin=String(cfg.GSTIN||cfg.Bill_From_GSTIN||base.GSTIN||base.Bill_From_GSTIN||rec.ewbGstin||c.gstin||"").trim().toUpperCase();
+ const efUser=cfg.EFUserName||cfg.EFUsername||base.EFUserName||base.EFUsername||"";
  const efPass=cfg.EFPassword||base.EFPassword||"";
- const cdKey=cfg.CDKey||base.CDKey||"";
- const ewbUser=cfg.EWBUserName||cfg.EwbUserName||gstin;
- const ewbPass=cfg.EWBPassword||cfg.EwbPassword||efPass;
- if(!gstin||!efUser||!efPass||!cdKey||!ewbUser||!ewbPass){
-  alert("Webtel Sandbox credentials incomplete hain. Other > Webtel API Settings me GSTIN, CDKey, EFUserName/Password aur E-Way Bill credentials check karein.");return;
+ const cdKey=cfg.CDKey||cfg.Cdkey||base.CDKey||base.Cdkey||"";
+ const ewbUser=cfg.EWBUserName||cfg.EwbUserName||base.EWBUserName||base.EwbUserName||gstin;
+ const ewbPass=cfg.EWBPassword||cfg.EwbPassword||base.EWBPassword||base.EwbPassword||"";
+ if(!gstin||!/^\d{2}[A-Z0-9]{13}$/.test(gstin)||!efUser||!efPass||!cdKey||!ewbUser||!ewbPass){
+  alert("Webtel Sandbox credentials incomplete/invalid hain. Other > Webtel API Settings me Sandbox GSTIN (15 characters), CDKey, EFUserName/Password aur EWBUserName/Password check karein. Company Master ka Live GSTIN Sandbox GSTIN se alag ho sakta hai.");return;
  }
  const d=String(rec.date||"").match(/^(\d{4})-(\d{2})-/);
- const payload={GSTIN:gstin,ewbNo:ewbNo,Year:d?d[1]:String(new Date().getFullYear()),Month:d?String(parseInt(d[2],10)):String(new Date().getMonth()+1),EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
+ const payload={GSTIN:gstin,ewbNo:ewbNo,Year:d?parseInt(d[1],10):new Date().getFullYear(),Month:d?parseInt(d[2],10):new Date().getMonth()+1,EFUserName:efUser,EFPassword:efPass,CDKey:cdKey,EWBUserName:ewbUser,EWBPassword:ewbPass};
  const w=window.open("","_blank");
  if(!w){alert("Official E-Way Bill print ke liye pop-ups allow karein.");return}
  w.document.write('<!doctype html><title>E-Way Bill</title><body style="font:14px Arial;padding:28px">Webtel portal se official E-Way Bill print fetch ho raha hai...</body>');
@@ -3302,6 +3329,13 @@ async function prPortalEwb(rec,k){
   const raw=await response.text();
   if(!response.ok)throw new Error("HTTP "+response.status+" - "+raw.slice(0,1200));
   let data;try{data=JSON.parse(raw)}catch(e){data=raw}
+  const result=Array.isArray(data)?data[0]:data;
+  const apiSuccess=!!(result&&typeof result==="object"&&(String(result.IsSuccess||result.isSuccess||result.Success||result.success||"").toLowerCase()==="true"));
+  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",url,httpStatus:response.status,ok:apiSuccess,request:edocSafeRequest(payload),response:raw,responseType:response.headers.get("content-type")||"text/plain"});
+  if(result&&typeof result==="object"&&!apiSuccess){
+   const msg=result.ErrorMessage||result.errorMessage||"Webtel did not return a successful E-Way Bill print";
+   w.document.open();w.document.write('<!doctype html><meta charset="utf-8"><title>E-Way Bill Print Error</title><body style="font:14px Arial;padding:24px"><h3>Official E-Way Bill print failed</h3><p><b>'+esc(msg)+'</b></p><p>GSTIN sent: '+esc(gstin)+'<br>E-Way Bill No. sent: '+esc(ewbNo)+'</p><pre style="white-space:pre-wrap;background:#f5f6fa;padding:12px">'+esc(raw)+'</pre></body>');w.document.close();return;
+  }
   const find=(o,keys)=>{if(!o||typeof o!=="object")return "";for(const key of keys){if(o[key]!==undefined&&o[key]!==null&&o[key]!=="")return o[key]}for(const v of Object.values(o)){const z=find(v,keys);if(z)return z}return ""};
   let b64=typeof data==="string"?data:find(data,["PDF","Pdf","pdf","PDFData","PdfData","FileData","fileData","Base64","base64","Data","data"]);
   let html=typeof data==="string"&&/^\s*<!doctype html|^\s*<html/i.test(data)?data:find(data,["HTML","Html","html"]);
@@ -3315,6 +3349,7 @@ async function prPortalEwb(rec,k){
   w.document.open();w.document.write('<!doctype html><title>E-Way Bill API Response</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');
   w.document.body.textContent=typeof data==="string"?data:JSON.stringify(data,null,2);w.document.close();
  }catch(err){
+  edocLog(rec,{category:"portalPrint",kind:"ewb",environment:"sandbox",action:"PrintEWBDetail2",actionName:"Official E-Way Bill portal print",ok:false,response:"Request failed: "+(err.message||err)});
   w.close();
   const mixed=location.protocol==="https:"?"\n\nNote: Software HTTPS par open hai aur aapka Webtel URL HTTP hai. Browser mixed-content block kar sakta hai; HTTPS endpoint ya backend proxy chahiye.":"";
   alert("Official E-Way Bill print fetch nahi ho saka.\n"+(err.message||err)+mixed);
@@ -3355,6 +3390,7 @@ function printMenuDraw(){
  <div style="margin-top:6px"><label style="font-size:12px">Copy (Customize print)</label><select id="pr_copy" style="margin-top:3px"><option>Original Copy</option><option>Duplicate Copy</option><option>Triplicate Copy</option><option value="all">All 3 copies</option></select></div>
  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Print Setup (logo, signature, terms)</summary>${img("logo","Company Logo",P.logo)}${img("sign","Signature",P.sign)}<div style="margin-top:8px"><label style="font-size:12px">Signatory label</label><input value="${esc(P.label)}" onchange="ppSet('signLabel',this.value)"></div><div style="margin-top:8px"><label style="font-size:12px">Terms &amp; Conditions (one line each)</label><textarea rows="4" style="width:100%" onchange="ppSet('terms',this.value)">${esc(P.terms)}</textarea></div></details>
  <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">E-Invoice / E-Way Bill details (enter if generated elsewhere)</summary>${[["irn","IRN"],["ackNo","Ack. No."],["ackDate","Ack. Date (YYYY-MM-DD HH:MM:SS)"],["ewbNumber","E-Way Bill No."],["ewbDate","E-Way Bill Date (YYYY-MM-DD HH:MM:SS)"],["ewbValidTill","E-Way Bill Valid Till (YYYY-MM-DD HH:MM:SS)"],["vehicleNo","Vehicle No."],["transporterName","Transporter Name"],["distance","Approx Distance (KM)"]].map(([k2,l])=>`<div style="margin-top:6px"><label style="font-size:12px">${l}</label><input value="${esc(rec[k2]||"")}" onchange="edSet('${k2}',this.value.trim())"></div>`).join("")}<div style="margin-top:8px"><label style="font-size:12px">E-Invoice QR image</label><div style="display:flex;align-items:center;gap:8px;margin-top:3px">${rec.qrCodeImage?`<img src="${/^data:/.test(rec.qrCodeImage)?rec.qrCodeImage:"data:image/png;base64,"+rec.qrCodeImage}" style="height:48px;border:1px solid #e1e5f0">`:`<span style="font-size:12px;color:#8a94a8">Not set</span>`}<input type="file" accept="image/*" onchange="edQr(this)" style="flex:1;font-size:12px"></div></div><div style="font-size:11px;color:#8a94a8;margin-top:6px">Saved on the bill. Reopen Print to see the updated status.</div></details>
+ <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Saved E-Invoice / E-Way Bill API Responses (${(rec.edocHistory||[]).length})</summary>${(rec.edocHistory||[]).length?(rec.edocHistory||[]).map((h,i)=>`<div style="border-top:1px solid #e5e9f2;padding:8px 2px;font-size:11px"><b>${esc(h.actionName||h.action||"API")}</b> · ${esc(h.environment||"")} · ${esc(h.at||"")} · HTTP ${esc(h.httpStatus??"-")} · ${h.ok?"Success":"Failed"}${h.category==="portalPrint"&&h.ok?` <button class="e" style="padding:3px 8px;font-size:11px" onclick="edocOpenSaved(${JSON.stringify(h.response).replace(/</g,"\u003c")},'Saved portal print')">Open saved portal print</button>`:""}</div>`).join(""):`<div style="font-size:12px;color:#8a94a8;margin-top:8px">Abhi koi API response save nahi hai.</div>`}</details>
  <div class="btns" style="margin-top:12px"><button class="g" onclick="$('pdlg').close()">Close</button></div>`;
 }
 
