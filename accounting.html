@@ -488,7 +488,7 @@ function reportPeriodControls(){
  const months=names.map((name,i)=>`<option value="${i+1}" ${+(RS.periodMonth||4)===i+1?"selected":""}>${name}</option>`).join("");
  const fys=Array.from({length:8},(_,i)=>FY0+2-i).map(y=>`<option value="${y}" ${y===fy?"selected":""}>${fyl(y)}</option>`).join("");
  const r=reportPeriodRange();
- return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?(/^(sale|purchase|salereturn|purchasereturn|receipt|payment|journal)register$|^(cash|bank|day)book$/.test(cur)?`<div><label>Date</label><input type="date" value="${RS.periodFrom&&RS.periodFrom===RS.periodTo?RS.periodFrom:""}" onchange="setDt1(this.value)"></div>`:`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`):""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
+ return `<div class="ctl" style="background:#f7f8ff;border:1px solid #e4e8f5;border-radius:10px;margin:10px 0;align-items:end"><div><label>Period Type</label><select onchange="RS.periodType=this.value;render()"><option ${RS.periodType==="Month"?"selected":""}>Month</option><option ${RS.periodType==="Financial Year"?"selected":""}>Financial Year</option><option ${RS.periodType==="Custom Date"?"selected":""}>Custom Date</option></select></div>${RS.periodType==="Month"?`<div><label>Month</label><select onchange="RS.periodMonth=this.value;render()">${months}</select></div>`:""}<div><label>Financial Year</label><select onchange="RS.periodFY=+this.value;RS.periodFrom='';RS.periodTo='';render()">${fys}</select></div>${RS.periodType==="Custom Date"?(false?``:`<div><label>From Date</label><input type="date" value="${RS.periodFrom||r.from}" onchange="setDt('periodFrom',this.value)"></div><div><label>To Date</label><input type="date" value="${RS.periodTo||r.to}" onchange="setDt('periodTo',this.value)"></div>`):""}<div style="min-width:190px;font-size:12px;color:#5b6784;padding:8px 0">Showing: <b>${fd(r.from)} to ${fd(r.to)}</b></div></div>`;
 }
 function bookPeriodRange(){return reportPeriodRange()}
 function bookPeriodControls(){return reportPeriodControls()}
@@ -4084,7 +4084,45 @@ function del(id){
 }
 
 $("add").onclick=()=>{if(cur==="users"){uForm();return}if(VK[cur]&&RS.vf){RS.vf=null;render();return}if(KC[cur]&&RS.sf){RS.sf=null;if(RS.back){cur=RS.back;RS.back=null}render();return}if(cur==="dashboard"){cur="company";render()}openForm()};
-document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave()}if(e.key==="F2"&&VK[cur]&&RS.vf){e.preventDefault();voucherSave()}});
+document.addEventListener("keydown",e=>{if(e.key==="F2"&&KC[cur]&&RS.sf){e.preventDefault();saleSave();return}if(e.key==="F2"&&VK[cur]&&RS.vf){e.preventDefault();voucherSave();return}
+ /* F2 on every other screen (master forms, user form, settings...): click the visible Save button */
+ if(e.key==="F2"){const vis=b=>!!b&&!b.disabled&&b.offsetParent!==null;let t=null;const dl=document.getElementById("dlg");
+  if(dl&&dl.open){const b=document.getElementById("sv");if(vis(b))t=b}
+  if(!t){const bs=[...document.querySelectorAll("button")].filter(b=>vis(b)&&/^\W*Save\b/i.test((b.textContent||"").trim()));t=bs.find(b=>/^\W*Save All\b/i.test(b.textContent.trim()))||bs[0]||null}
+  if(t){e.preventDefault();t.click()}}});
+/* ===== Keyboard shortcuts: Ctrl = transaction forms, Alt = registers / books / reports. Letters can be typed one after another (Ctrl+S then R = Sale Return) ===== */
+(function(){
+ const T={"c:s":["form","sale"],"c:sr":["form","salereturn"],"c:p":["form","purchase"],"c:pr":["form","purchasereturn"],"c:pm":["form","payment"],"c:r":["form","receipt"],"c:j":["form","journal"],
+  "c:el":["page","einvlive"],"c:es":["page","einvsand"],"c:ewl":["page","ewblive"],"c:ews":["page","ewbsand"],
+  "a:el":["page","einvlive"],"a:es":["page","einvsand"],"a:ewl":["page","ewblive"],"a:ews":["page","ewbsand"],
+  "c:d":["page","daybook"],"c:l":["page","ledger"],"a:l":["page","ledger"],"c:i":["page","itemledger"],
+  "a:c":["page","cashbook"],"a:b":["page","bankbook"],"a:j":["page","journalregister"],"a:s":["page","saleregister"],"a:p":["page","purchaseregister"],
+  "a:sr":["page","salereturnregister"],"a:pr":["page","purchasereturnregister"],"a:rr":["page","receiptregister"],"a:pm":["page","paymentregister"],
+  "a:or":["page","recv"],"a:op":["page","pay"],"a:ss":["page","stockstatus"]};
+ const keys=Object.keys(T),isPre=(m,b)=>keys.some(k=>k.startsWith(m+":"+b)),hasLonger=(m,b)=>keys.some(k=>k.startsWith(m+":"+b)&&k.length>(m+":"+b).length);
+ let sq=null,tm=null;const clr=()=>{sq=null;clearTimeout(tm)},arm=()=>{clearTimeout(tm);tm=setTimeout(()=>{sq=null},700)};
+ function run(t){const kind=t[0],k=t[1];
+  if(!navOk(k))return;
+  if($("q"))$("q").value="";
+  if(kind==="form"){if(cur===k&&(RS.sf||RS.vf))return;go(k);return}
+  if(cur===k&&!RS.sf&&!RS.vf)return;
+  RS.sf=null;RS.vf=null;RS.back=null;RS.regTabs=REGTABS.some(x=>x[0]===k);cur=k;render()}
+ function hit(m,b){const k=m+":"+b;if(T[k])run(T[k]);if(hasLonger(m,b))arm();else clr()}
+ document.addEventListener("keydown",e=>{
+  if(["Control","Alt","Shift","Meta"].includes(e.key))return;
+  if(authOn()&&!curUser())return;
+  if((document.getElementById("dlg")||{}).open||(document.getElementById("pdlg")||{}).open){clr();return}
+  const ch=/^Key[A-Z]$/.test(e.code||"")?e.code.slice(3).toLowerCase():"";
+  if(!ch){clr();return}
+  if(sq&&((sq.m==="c"&&(!e.altKey&&!e.metaKey))||(sq.m==="a"&&(!e.ctrlKey&&!e.metaKey)))&&!e.shiftKey){
+   const b=sq.b+ch;
+   if(isPre(sq.m,b)){e.preventDefault();e.stopPropagation();sq.b=b;hit(sq.m,b);return}
+   clr()}
+  let m=null;
+  if(e.ctrlKey&&!e.altKey&&!e.shiftKey&&!e.metaKey)m="c";else if(e.altKey&&!e.ctrlKey&&!e.shiftKey&&!e.metaKey)m="a";else return;
+  if(!isPre(m,ch))return;
+  e.preventDefault();e.stopPropagation();sq={m,b:ch};hit(m,ch)},true);
+})();
 $("sv").onclick=saveForm;
 $("cx").onclick=()=>$("dlg").close();
 $("dlg").addEventListener("close",()=>{if(RS.ret){const k=RS.ret,np=RS.newParty,ni=RS.newItem;RS.ret=null;RS.newParty=null;RS.newItem=null;cur=k;render();if(np&&RS.sf)sfParty(np);if(ni&&RS.sf)sfItemNew(ni)}});
