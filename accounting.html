@@ -317,7 +317,7 @@ const CLOUD_KEY="sb_publishable_hHo5LfAoIDXKcSp1_5pHKg_JPvJgkGX";
 let cloudClient=null,cloudUser=null,cloudReady=false,cloudDirty=false,cloudTimer=null,cloudStamp="",cloudPolling=null;
 function cloudMessage(msg,isError=false){const e=$("cloudError"),st=$("cloudStatus");if(e)e.textContent=isError?msg:"";if(st)st.textContent=isError?"":msg}
 function cloudGate(show){const g=$("cloudGate");if(g)g.style.display=show?"flex":"none"}
-function cloudSnapshot(){const x=JSON.parse(bkJson());return x.db}
+function cloudSnapshot(){const x=JSON.parse(bkJson());x.db.settings=x.db.settings||{};if(DB.settings&&DB.settings.api)x.db.settings.api=DB.settings.api;return x.db}
 function cloudStoreLocal(){try{localStorage.setItem("acc_db",JSON.stringify(DB))}catch(e){}}
 function cloudNormalize(obj){obj=obj&&typeof obj==="object"?obj:{};Object.keys(M).forEach(k=>{if(!Array.isArray(obj[k]))obj[k]=[]});obj.users=Array.isArray(obj.users)?obj.users:[];obj.settings=obj.settings||{};return obj}
 async function cloudLoadRow(){
@@ -331,8 +331,9 @@ async function cloudLoadRow(){
  }else{
   const localApi=DB.settings&&DB.settings.api;
   DB=cloudNormalize(data.data);
-  if(localApi){DB.settings=DB.settings||{};DB.settings.api=localApi}
-  cloudStoreLocal();cloudStamp=data.updated_at||"";cloudReady=true;cloudDirty=false;cloudMessage("Central database से data sync हो गया।");
+  let pushApi=false;
+  if(!DB.settings.api&&localApi){DB.settings.api=localApi;pushApi=true}
+  cloudStoreLocal();cloudStamp=data.updated_at||"";cloudReady=true;cloudDirty=false;if(pushApi)setTimeout(cloudQueue,500);cloudMessage("Central database से data sync हो गया।");
  }
  render();
 }
@@ -352,7 +353,7 @@ async function cloudPush(){
 async function cloudPull(){
  if(!cloudReady||!cloudUser||cloudDirty||document.querySelector("dialog[open]"))return;
  try{const {data,error}=await cloudClient.from("accounting_data").select("data,updated_at").eq("user_id",cloudUser.id).maybeSingle();if(error||!data||!data.updated_at||data.updated_at===cloudStamp)return;
-  const localApi=DB.settings&&DB.settings.api;DB=cloudNormalize(data.data);if(localApi){DB.settings=DB.settings||{};DB.settings.api=localApi}cloudStamp=data.updated_at;cloudStoreLocal();render();cloudMessage("दूसरे device से आया नया data sync हो गया।")
+  const localApi=DB.settings&&DB.settings.api;DB=cloudNormalize(data.data);if(!DB.settings.api&&localApi)DB.settings.api=localApi;cloudStamp=data.updated_at;cloudStoreLocal();render();cloudMessage("दूसरे device से आया नया data sync हो गया।")
  }catch(e){/* keep local work available if network is temporarily unavailable */}
 }
 function cloudStartPolling(){if(cloudPolling)clearInterval(cloudPolling);cloudPolling=setInterval(cloudPull,8000)}
