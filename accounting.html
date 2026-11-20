@@ -464,11 +464,20 @@ function exportReportExcel(){
  const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'application/vnd.ms-excel;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(R[cur]?.t||'Report').replace(/[^a-z0-9_-]/gi,'_')+'.xls';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-function exportReportPDF(){
+function loadH2P(){return window.html2pdf?Promise.resolve():new Promise((ok,no)=>{const e=document.createElement('script');e.src='https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';e.onload=ok;e.onerror=()=>no(new Error('lib'));document.head.appendChild(e)})}
+async function exportReportPDF(){
  const t=reportTable();if(!t){alert('Export karne ke liye report table nahi mili.');return}
- const title=R[cur]?.t||'Report';const w=window.open('','_blank');if(!w){alert('PDF ke liye popup allow karein.');return}
- const clone=reportClean(t);
- w.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h2{margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#e8ecf7}.tot{margin-top:10px;text-align:right;font-weight:bold}@media print{button{display:none}}</style></head><body><h2>'+title+'</h2>'+clone.outerHTML+'<script>window.onload=()=>{window.print()}<\\/script></body></html>');w.document.close();
+ const title=R[cur]?.t||'Report';const clone=reportClean(t);
+ const cols=(clone.querySelector('tr')||{children:[]}).children.length;const land=cols>6;
+ const tot=t.parentElement&&t.parentElement.querySelector('.tot');
+ const box=document.createElement('div');box.style.cssText='position:fixed;left:0;top:0;z-index:-1;background:#fff;color:#111;font-family:Arial,sans-serif;padding:14px;width:'+(land?1060:730)+'px';
+ box.innerHTML='<style>h2{margin:0 0 10px;font-size:16px}table{border-collapse:collapse;width:100%;font-size:'+(cols>10?9:11)+'px}th,td{border:1px solid #999;padding:5px;text-align:left}th{background:#e8ecf7}tr{page-break-inside:avoid}.tot{margin-top:8px;text-align:right;font-weight:bold;font-size:11px}</style><h2>'+esc(title)+'</h2>';
+ box.appendChild(clone);if(tot){const d=document.createElement('div');d.className='tot';d.innerHTML=tot.innerHTML;box.appendChild(d)}
+ document.body.appendChild(box);
+ try{await loadH2P();
+  await html2pdf().set({margin:6,filename:title.replace(/[^a-z0-9_-]/gi,'_')+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2,backgroundColor:'#fff'},jsPDF:{unit:'mm',format:'a4',orientation:land?'landscape':'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(box).save();
+ }catch(e){alert('PDF download nahi ho paya (internet/library load nahi hui). Internet check karke dobara try karein.')}
+ finally{box.remove()}
 }
 const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
 const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="setDt('${k}',this.value)"></div>`;
