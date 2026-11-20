@@ -649,7 +649,7 @@ const R={
   const mx=Math.max(...mv,1);
   const K=[["Total Sales (with Tax)",SG.g,tl(SG)+" | FY "+L,"₹","#e8edff","#3d5afe"],["Total Purchase (with Tax)",PG.g,tl(PG)+" | FY "+L,"₹","#fff0d9","#e08a00"],["Total Receipt",fy("receipt"),"FY "+L,"₹","#efe9ff","#6a4cd9"],["Total Payment",fy("payment"),"FY "+L,"₹","#ffe9f0","#d81b60"],["Amount Receivable",rc,"Closing Dr","₹","#e1f6ea","#14803c"],["Payable",pb,"Closing Cr","₹","#ffe6e6","#e53935"]];
   const Q=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","party","item"];
-  return `<div class="kpis">${K.map((k,i)=>`<div class="kp" ${i===0?'style="cursor:default"':`onclick="dashGo(${i})" title="Click to see all transactions"`}><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
+  return `<div class="kpis">${K.map((k,i)=>`<div class="kp" onclick="dashGo(${i})" title="Click to see all transactions"><div class="ki" style="background:${k[4]};color:${k[5]}">${k[3]}</div><div><small>${k[0]}</small><b>${inr(k[1])}</b><i>${k[2]}</i></div></div>`).join("")}</div>
   <div class="dash2"><div class="pan"><b>Sales Overview</b><small>FY ${L} • Monthly sale value</small><div class="chart">${mv.map((v,i)=>`<div class="bc"><div class="bar2 ${v?"":"z"}" style="height:${v?Math.max(6,v/mx*88):3}%" title="${nm[i]}: ${inr(v)}"></div>${nm[i]}</div>`).join("")}</div><div class="fys">FY Sales: <b>${inr(fy("sale"))}</b></div></div>
   <div class="pan"><b>Quick Actions</b><small>Transactions, masters and reports</small><div class="qa">${Q.map(k=>`<div class="qt" onclick="go('${k}')"><span>${ICON[k]}</span>${T(k)}<b>+</b></div>`).join("")}</div></div></div>`}},
  daybook:{t:"Day Book",f(){
@@ -1722,7 +1722,7 @@ function gateHtml(){
 /* ===== Sale Entry (invoice form) ===== */
 const STATES=("01:Jammu & Kashmir|02:Himachal Pradesh|03:Punjab|04:Chandigarh|05:Uttarakhand|06:Haryana|07:Delhi|08:Rajasthan|09:Uttar Pradesh|10:Bihar|11:Sikkim|12:Arunachal Pradesh|13:Nagaland|14:Manipur|15:Mizoram|16:Tripura|17:Meghalaya|18:Assam|19:West Bengal|20:Jharkhand|21:Odisha|22:Chhattisgarh|23:Madhya Pradesh|24:Gujarat|26:Dadra & Nagar Haveli and Daman & Diu|27:Maharashtra|29:Karnataka|30:Goa|31:Lakshadweep|32:Kerala|33:Tamil Nadu|34:Puducherry|35:Andaman & Nicobar Islands|36:Telangana|37:Andhra Pradesh|38:Ladakh|97:Other Territory").split("|").map(x=>x.split(":"));
 const stName=c=>(STATES.find(z=>z[0]===String(c||"").padStart(2,"0"))||["",""])[1];
-const lines=x=>Array.isArray(x.items)?(x.items.forEach(l=>{if(l.hsn)l.hsn=hsnFix(l.hsn)}),x.items):[{item:x.item,hsn:"",unit:"",qty:x.qty,rate:x.rate,disc:0,gst:(DB.item.find(i=>i.id===x.item)||{}).gst,taxable:+x.amount||0}];
+const lines=x=>Array.isArray(x.items)?(x.items.forEach(l=>{if(l&&l.hsn)l.hsn=hsnFix(l.hsn)}),x.items):[{item:x.item,hsn:"",unit:"",qty:x.qty,rate:x.rate,disc:0,gst:(DB.item.find(i=>i.id===x.item)||{}).gst,taxable:+x.amount||0}];
 const sv=x=>x.taxable!==undefined?+x.taxable||0:+x.amount||0;
 const lineSum=x=>lines(x).map(l=>lookup("item",l.item)+" × "+l.qty).join(", ");
 const KC={
@@ -3640,13 +3640,13 @@ function render(){
  if(isR){$("ttl").textContent=R[cur].t;$("extra").innerHTML="";
   if(gated&&RS.gateOk!==cur){$("list").className="";$("list").innerHTML=gateHtml();setTimeout(()=>{const e=$("gpw");if(e&&e.focus)e.focus()},50)}
   else {
-   const reportHtml=(()=>{
+   let reportHtml;try{reportHtml=(()=>{
     if(cur==="dashboard"||["ledger","recv","pay","finpos","payremind","stockstatus","itemledger"].includes(cur)||SRCH.includes(cur)) return R[cur].f();
     const dateKeys=["sale","purchase","salereturn","purchasereturn","receipt","payment","journal","po","stock"];
     const saved={}; const range=reportPeriodRange();
     dateKeys.forEach(k=>{saved[k]=DB[k];DB[k]=(DB[k]||[]).filter(x=>!x.date||(x.date>=range.from&&x.date<=range.to));});
     try { return R[cur].f(); } finally { dateKeys.forEach(k=>{if(saved[k])DB[k]=saved[k];}); }
-   })();
+   })()}catch(err){console.error(err);reportHtml='<div style="padding:16px;color:#b00020"><b>Report kholte waqt error aaya:</b> '+esc(err&&err.message||err)+'<pre style="white-space:pre-wrap;font-size:11px;color:#444">'+esc(String(err&&err.stack||"").split("\n").slice(0,4).join("\n"))+'</pre></div>'}
    $("list").innerHTML=(RS.regTabs?regTabsHtml():"")+(cur==="dashboard"||NOPERIOD.includes(cur)?"":reportPeriodControls())+reportHtml;
    $("extra").innerHTML=reportExportButtons();
   }
