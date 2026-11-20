@@ -499,6 +499,9 @@ async function exportReportPDF(){
   try{await html2pdf().set({margin:6,filename:fn,image:{type:'jpeg',quality:.95},html2canvas:{scale:1.5,backgroundColor:'#fff',scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:land?'landscape':'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(box).save()}finally{wrap.remove()}
  }catch(e){console.error(e);alert('PDF download nahi ho paya (internet/library load nahi hui). Internet check karke dobara try karein.')}
 }
+const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
+const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="setDt('${k}',this.value)"></div>`;
+const isBank=x=>(x.mode||"Cash")!=="Cash";
 function setDt(k,v){
  const y=+String(v).slice(0,4);
  if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&y>=1990&&y<=2100){RS[k]=v;render()}
