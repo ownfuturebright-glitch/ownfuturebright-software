@@ -464,25 +464,41 @@ function exportReportExcel(){
  const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'application/vnd.ms-excel;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(R[cur]?.t||'Report').replace(/[^a-z0-9_-]/gi,'_')+'.xls';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-function loadH2P(){return window.html2pdf?Promise.resolve():new Promise((ok,no)=>{const e=document.createElement('script');e.src='https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';e.onload=ok;e.onerror=()=>no(new Error('lib'));document.head.appendChild(e)})}
+function loadScr(src,ok){return ok()?Promise.resolve():new Promise((res,rej)=>{const e=document.createElement('script');e.src=src;e.onload=res;e.onerror=()=>rej(new Error('lib'));document.head.appendChild(e)})}
+async function loadPDFLibs(){await loadScr('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',()=>window.jspdf&&window.jspdf.jsPDF);await loadScr('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',()=>window.jspdf.jsPDF.API.autoTable)}
 async function exportReportPDF(){
  const t=reportTable();if(!t){alert('Export karne ke liye report table nahi mili.');return}
- const title=R[cur]?.t||'Report';const clone=reportClean(t);
- const cols=(clone.querySelector('tr')||{children:[]}).children.length;const land=cols>6;
- const tot=t.parentElement&&t.parentElement.querySelector('.tot');
- const box=document.createElement('div');box.style.cssText='position:fixed;left:0;top:0;z-index:-1;background:#fff;color:#111;font-family:Arial,sans-serif;padding:14px;width:'+(land?1060:730)+'px';
- box.innerHTML='<style>h2{margin:0 0 10px;font-size:16px}table{border-collapse:collapse;width:100%;font-size:'+(cols>10?9:11)+'px}th,td{border:1px solid #999;padding:5px;text-align:left}th{background:#e8ecf7}tr{page-break-inside:avoid}.tot{margin-top:8px;text-align:right;font-weight:bold;font-size:11px}</style><h2>'+esc(title)+'</h2>';
- box.appendChild(clone);if(tot){const d=document.createElement('div');d.className='tot';d.innerHTML=tot.innerHTML;box.appendChild(d)}
- document.body.appendChild(box);
- try{await loadH2P();
-  await html2pdf().set({margin:6,filename:title.replace(/[^a-z0-9_-]/gi,'_')+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2,backgroundColor:'#fff'},jsPDF:{unit:'mm',format:'a4',orientation:land?'landscape':'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(box).save();
- }catch(e){alert('PDF download nahi ho paya (internet/library load nahi hui). Internet check karke dobara try karein.')}
- finally{box.remove()}
+ const title=R[cur]?.t||'Report';const clone=reportClean(t);const fn=title.replace(/[^a-z0-9_-]/gi,'_')+'.pdf';
+ const tx=c=>(c.innerText||c.textContent||'').replace(/\s+/g,' ').trim();
+ const rows=[...clone.querySelectorAll('tr')].map(tr=>[...tr.children].map(tx));
+ if(!rows.length||!rows[0].length){alert('Export karne ke liye data nahi mila.');return}
+ const cols=rows[0].length;const land=cols>6;
+ const totEl=t.parentElement&&t.parentElement.querySelector('.tot');const totTxt=totEl?tx(totEl):'';
+ const fix=v=>String(v).replace(/₹/g,'Rs.');
+ const all=rows.flat().concat([title,totTxt]).map(fix).join('');
+ const latin=!/[^\u0000-\u00FF\u2013\u2014\u2018-\u201D\u2022]/.test(all);
+ try{
+  if(latin){
+   await loadPDFLibs();
+   const doc=new window.jspdf.jsPDF({orientation:land?'l':'p',unit:'mm',format:'a4'});
+   const head=[rows[0].map(fix)];const body=rows.slice(1).map(r=>r.map(fix));
+   const num=v=>/^[-+]?[\d,]*\.?\d+(\s?(Dr|Cr))?$/i.test(String(v).trim());
+   const cs={};for(let c=0;c<cols;c++){const vals=body.map(r=>r[c]).filter(v=>v!==undefined&&v!=='');if(vals.length&&vals.filter(num).length/vals.length>.7)cs[c]={halign:'right'}}
+   doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text(fix(title),8,11);
+   doc.autoTable({head,body:body.length?body:[['No data found']],startY:15,margin:{left:8,right:8,top:12,bottom:12},theme:'grid',styles:{fontSize:cols>12?6.5:cols>9?7.5:8.5,cellPadding:1.5,lineColor:[150,150,150],lineWidth:.1,textColor:20,overflow:'linebreak'},headStyles:{fillColor:[232,236,247],textColor:20,fontStyle:'bold'},columnStyles:cs,showHead:'everyPage',
+    didDrawPage:()=>{doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Page '+doc.internal.getNumberOfPages(),doc.internal.pageSize.getWidth()-8,doc.internal.pageSize.getHeight()-5,{align:'right'})}});
+   if(totTxt){let y=doc.lastAutoTable.finalY+7;if(y>doc.internal.pageSize.getHeight()-12){doc.addPage();y=14}doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text(fix(totTxt),doc.internal.pageSize.getWidth()-8,y,{align:'right'})}
+   doc.save(fn);return}
+  // non-English text: render as image-based PDF
+  await loadScr('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',()=>window.html2pdf);
+  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;left:-30000px;top:0';
+  const box=document.createElement('div');box.style.cssText='background:#fff;color:#111;font-family:Arial,sans-serif;padding:14px;width:'+(land?1060:730)+'px';
+  box.innerHTML='<style>h2{margin:0 0 10px;font-size:16px}table{border-collapse:collapse;width:100%;font-size:'+(cols>10?9:11)+'px}th,td{border:1px solid #999;padding:5px;text-align:left}th{background:#e8ecf7}tr{page-break-inside:avoid}.tot{margin-top:8px;text-align:right;font-weight:bold;font-size:11px}</style><h2>'+esc(title)+'</h2>';
+  box.appendChild(clone);if(totTxt){const d=document.createElement('div');d.className='tot';d.textContent=totTxt;box.appendChild(d)}
+  wrap.appendChild(box);document.body.appendChild(wrap);
+  try{await html2pdf().set({margin:6,filename:fn,image:{type:'jpeg',quality:.95},html2canvas:{scale:1.5,backgroundColor:'#fff',scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:land?'landscape':'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(box).save()}finally{wrap.remove()}
+ }catch(e){console.error(e);alert('PDF download nahi ho paya (internet/library load nahi hui). Internet check karke dobara try karein.')}
 }
-const tbl=(h,rows,foot)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join("")}</tr>${rows.length?rows.map(r=>"<tr>"+r.map(c=>`<td>${c}</td>`).join("")+"</tr>").join(""):`<tr><td colspan="${h.length}" class="empty">No data found</td></tr>`}</table>`+(foot?`<div class="tot">${foot}</div>`:"");
-const dateCtl=(k,l)=>`<div><label>${l}</label><input type="date" value="${RS[k]}" onchange="setDt('${k}',this.value)"></div>`;
-const isBank=x=>(x.mode||"Cash")!=="Cash";
-
 function setDt(k,v){
  const y=+String(v).slice(0,4);
  if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&y>=1990&&y<=2100){RS[k]=v;render()}
