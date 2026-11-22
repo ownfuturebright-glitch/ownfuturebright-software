@@ -3335,23 +3335,66 @@ function prEinvHtml(rec,k,copy){
  h+=`<div style="display:flex;min-height:140px"><div style="flex:1.15;position:relative;padding:8px 12px"><div class="b" style="margin-bottom:4px">Terms &amp; Conditions</div>${String(P.terms).split("\n").map(x=>`<div class="b" style="font-size:8.6px;line-height:1.5">${esc(x)}</div>`).join("")}<div class="b" style="position:absolute;right:10px;bottom:8px">Receiver's Signature</div></div><div class="bl" style="flex:1;text-align:center;padding:12px 8px;position:relative"><div class="b" style="font-size:11px">FOR ${esc(String(c.name||"").toUpperCase())}</div><div style="height:72px;margin-top:8px">${P.stamp?`<img src="${P.stamp}" style="position:absolute;left:10px;top:24px;max-height:84px;max-width:120px">`:""}${P.sign?`<img src="${P.sign}" style="max-height:72px;max-width:200px">`:""}</div><div class="b" style="margin-top:6px">${esc(P.label)}</div></div></div></div>`;
  return h;
 }
+function ewbInfo(rec){
+ const o={ewbDate:rec.ewbDate||"",valid:rec.ewbValidTill||"",dist:rec.distance||"",veh:rec.vehicleNo||"",trId:rec.transporterId||"",trName:rec.transporterName||"",docNo:rec.transDocNo||"",docDt:rec.transDocDate||rec.transDocDt||""};
+ const hs=(rec.edocHistory||[]).filter(h=>h&&h.ok!==false&&h.category!=="portalPrint");
+ const pj=t=>{try{return JSON.parse(t)}catch(e){return null}};
+ const resp=hs.map(h=>pj(h.response)).filter(Boolean),req=hs.map(h=>pj(h.request)).filter(Boolean),all=resp.concat(req);
+ const get=(keys,src)=>{for(const ob of src){for(const k of keys){const v=fany(ob,k);if(v!==""&&v!==null&&v!==undefined&&String(v)!=="0")return String(v)}}return ""};
+ const fill=(f,keys,src)=>{if(!o[f])o[f]=get(keys,src||all)};
+ fill("ewbDate",["ewayBillDate","EwbDt","EwbDate","ewbDate","EWBDate"],resp);
+ fill("valid",["validUpto","EwbValidTill","ValidUpto","ewbValidTill","EWBValidTill"],resp);
+ fill("veh",["vehicleNo","VehNo","vehNo","VehicleNo"]);
+ fill("dist",["transDistance","Distance","distance","TransDistance"]);
+ fill("trId",["transporterId","TransId","transId"]);
+ fill("trName",["transporterName","TransName","transName"]);
+ fill("docNo",["transDocNo","TransDocNo"]);
+ fill("docDt",["transDocDate","TransDocDt"]);
+ return o;
+}
+function ewbDt(s){
+ s=String(s||"").trim();if(!s)return {d:"",t:"",q:""};
+ let y,mo,d,h=0,mi=0,ap="",m=s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+ if(m){y=m[1];mo=m[2];d=m[3];h=+(m[4]||0);mi=+(m[5]||0)}
+ else{m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?)?/i);
+  if(!m)return {d:s,t:"",q:""};
+  d=m[1].padStart(2,"0");mo=m[2].padStart(2,"0");y=m[3];h=+(m[4]||0);mi=+(m[5]||0);ap=(m[6]||"").toUpperCase();
+  if(ap==="PM"&&h<12)h+=12;if(ap==="AM"&&h===12)h=0}
+ const p2=n=>String(n).padStart(2,"0"),h12=(h%12)||12;
+ return {d:d+"/"+mo+"/"+y,t:p2(h12)+":"+p2(mi)+" "+(h>=12?"PM":"AM"),t2:p2(h12)+":"+p2(mi)+":00 "+(h>=12?"PM":"AM"),q:d+"-"+mo+"-"+y+" "+p2(h)+":"+p2(mi)+":00"};
+}
 function prEwbHtml(rec,k){
  const P=prCompany(),c=P.c,g=gstCalc(rec),pt=g.pt||{},gst=String(rec.gstin!==undefined?rec.gstin:(pt.gstin||""));
  const gt=rec.taxable!==undefined?+rec.amount:g.tot,gen=rec.ewbGstin||c.gstin||"";
- const ewb=rec.ewbNumber||(typeof edocEwbNo==="function"?edocEwbNo(rec):"")||"",fmt=s=>{s=dmyT(s);const m=s.match(/^(\d\d)-(\d\d)-(\d{4}) (\d\d):(\d\d)/);return m?`${m[1]}/${m[2]}/${m[3]} ${(+m[4]%12)||12}:${m[5]} ${+m[4]>=12?"PM":"AM"}`:s};
- const L=(a,b)=>`<td class="b" style="width:16%">${a}</td><td style="width:34%">: ${b}</td>`;
- const goods=g.lines.map(l=>`<tr><td>${esc(l.hsn||"")}</td><td>${esc(lookup("item",l.item)||"Goods / Services")}</td><td>${l.qty} ${esc((l.unit||"").toUpperCase())}</td><td>${inr2(l.t)}</td><td>${g.intra?(l.r/2)+"+"+(l.r/2)+"+0+0":"0+0+"+l.r+"+0"}</td></tr>`).join("");
- const party=(lab,nm,gs,ad)=>`<td style="width:50%;vertical-align:top;padding:5px 8px"><div class="b">${lab}</div><div>GSTIN : ${esc(gs||"-")}</div><div>${esc(nm||"")}</div><div style="font-size:8.6px">${esc(ad||"")}</div></td>`;
- const tot=(a,v)=>`<td class="b">${a}<div style="font-weight:normal;margin-top:3px">${v}</div></td>`;
- return `<div class="pg" style="page-break-after:auto"><div class="c b" style="font-size:15px;padding:8px 0;border-bottom:1px solid #000">e-Way Bill</div>
- <div style="display:flex;border-bottom:1px solid #000"><div style="flex:1;padding:8px 10px;line-height:1.8"><div class="b" style="font-size:11px">${esc(c.name||"")}</div><div class="b" style="font-size:8.6px">GSTIN: ${esc(c.gstin||"")}</div></div><div style="width:250px;padding:8px 10px;text-align:center">${ewb?`${code128(ewb,44)}<div style="font-size:10px;margin-top:2px;letter-spacing:1px">${esc(ewb)}</div>`:`<div class="b" style="color:#b86e00">E-Way Bill not generated</div>`}</div></div>
- <div class="sec" style="border-top:0">1. EWB Details</div><table class="t" style="line-height:1.7"><tr>${L("eWay Bill No",esc(ewb)||"-")}${L("Generated Date",esc(fmt(rec.ewbDate)))}</tr><tr>${L("Generated By",esc(gen))}${L("Valid From",esc(fmt(rec.ewbDate)))}</tr><tr>${L("Mode",esc(rec.transMode||"Road"))}${L("Valid Until",esc(fmt(rec.ewbValidTill)))}</tr><tr>${L("Approx Distance",esc(rec.distance?rec.distance+" KM":"-"))}${L("Type","Outward - Supply")}</tr><tr>${L("Transaction Type","Regular")}${L("Document Details",esc((k==="salereturn"?"Credit Note":"Tax Invoice")+" - "+(rec.inv||"")+" - "+fd(rec.date)))}</tr></table>
- <div class="sec">2. Address Details</div><table class="t"><tr>${party("From",c.name,c.gstin,P.addr)}${party("To",pt.name,gst,addrLine(pt.addr,stName(pt.stcode||g.pos),pt.pin))}</tr></table>
- <div class="sec">3. Goods Details</div><table class="t tx"><tr><th>HSN Code</th><th>Product Name &amp; Description</th><th>Quantity</th><th>Taxable Amount Rs.</th><th>Tax Rate (C+S+I+Cess)</th></tr>${goods}</table>
- <table class="t tx" style="margin-top:-1px"><tr>${tot("Total Taxable Amt",inr2(g.tv))}${tot("CGST Amt",inr2(g.cg))}${tot("SGST Amt",inr2(g.sg))}${tot("IGST Amt",inr2(g.ig))}${tot("CESS Amt","0.00")}${tot("CESS Non.Advol Amt","0.00")}${tot("Other Amt","0.00")}${tot("Total Inv. Amt",inr2(gt))}</tr></table>
- <div class="sec">4. Transportation Details</div><table class="t tx" style="margin-top:-1px"><tr><th>Mode</th><th>Vehicle / Trans Doc No &amp; Dt.</th><th>From</th><th>Entered Date</th><th>Entered By</th><th>CEWB No.</th><th>Multi Veh.Info</th></tr><tr><td>${esc(rec.transMode||"Road")}</td><td>${esc(rec.vehicleNo||rec.transDocNo||"-")}</td><td>${esc(c.city||"")}</td><td>${esc(fmt(rec.ewbDate))}</td><td>${esc(gen)}</td><td>-</td><td>-</td></tr></table>
- <div style="padding:10px 12px;font-size:8.6px;color:#555">Transporter: ${esc(rec.transporterName||"-")} ${rec.transporterId?"("+esc(rec.transporterId)+")":""}</div>
- <div style="display:flex;justify-content:flex-end;padding:14px 18px 10px"><div style="text-align:center;min-width:210px"><div class="b" style="font-size:10px">FOR ${esc(c.name||"")}</div><div style="height:62px;display:flex;align-items:center;justify-content:center">${P.sign?`<img src="${P.sign}" style="max-height:60px;max-width:190px">`:""}</div><div class="b" style="font-size:10px;border-top:1px solid #000;padding-top:3px">${esc(P.label||"AUTHORISED SIGNATORY")}</div></div></div></div>`;
+ const ewb=String(rec.ewbNumber||(typeof edocEwbNo==="function"?edocEwbNo(rec):"")||"").trim(),I=ewbInfo(rec),dg=ewbDt(I.ewbDate),dv=ewbDt(I.valid);
+ const sp=(t,n)=>String(t||"").replace(new RegExp("(.{"+n+"})(?!$)","g"),"$1 ");
+ const modeMap={"1":"ROAD","2":"RAIL","3":"AIR","4":"SHIP"},mode=modeMap[String(rec.transMode||"1")]||String(rec.transMode||"ROAD").toUpperCase();
+ const f2=v=>(+v||0).toFixed(2),r3=v=>(+v||0).toFixed(3);
+ const docT=k==="salereturn"?"Credit Note":"Tax Invoice",dd=ewbDt(rec.date).d||"";
+ const frSt=String(stName(String(gen).slice(0,2))||"").toUpperCase(),toSt=String(stName(pt.stcode||g.pos)||stName(gst.slice(0,2))||"").toUpperCase();
+ const goods=g.lines.map(l=>`<tr><td style="padding:5px 8px">${esc(l.hsn||"")}</td><td style="padding:5px 8px">${esc(lookup("item",l.item)||"Goods / Services")}</td><td style="padding:5px 8px">${(+l.qty||0).toFixed(2)} ${esc((l.unit||"").toUpperCase())}</td><td style="padding:5px 8px">${f2(l.t)}</td><td style="padding:5px 8px">${g.intra?r3(l.r/2)+"+"+r3(l.r/2)+"+0.000+0.000+0":"0.000+0.000+"+r3(l.r)+"+0.000+0"}</td></tr>`).join("");
+ const qrt=ewb?qrSvg(ewb+"/"+gen+"/"+(dg.q||"")):"";
+ const sec=t=>`<div style="padding:9px 10px 5px;font-weight:bold;font-size:12px">${t}</div>`;
+ const box=(lab,gs,nm,st,tag,ad)=>`<td style="width:50%;vertical-align:top;padding:2px 8px 6px"><div style="font-weight:bold;margin-bottom:3px">${lab}</div><div style="border:1px solid #777;border-radius:3px;padding:6px 8px;min-height:110px;font-size:9.5px;line-height:1.5">GSTIN : ${esc(gs||"-")}<br>${esc(nm||"")}<br>${esc(st)}<br><br>${tag}<br>${esc(ad||"")}</div></td>`;
+ const hl=`border-top:1px solid #444`;
+ return `<div class="pg" style="page-break-after:auto;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000">
+ <div style="position:relative;height:112px;border-bottom:1px solid #444"><div style="text-align:center;font-size:27px;font-weight:bold;padding-top:38px">e-Way Bill</div>${qrt?`<img src="${qrt}" style="position:absolute;right:60px;top:6px;width:100px;height:100px">`:""}</div>
+ ${sec("1. E-WAY BILL Details")}
+ <table style="width:100%;border-collapse:collapse;font-size:11px;line-height:2.1"><tr><td style="padding:0 10px">eWay Bill No:<b style="font-size:14px"> ${esc(sp(ewb,4))}</b></td><td>Generated Date:<b> ${esc(dg.d)} ${esc(dg.t)}</b></td><td>Generated By: <b>${esc(sp(gen,5))}</b></td><td>Valid Upto: <b>${esc(dv.d)}</b></td></tr>
+ <tr><td style="padding:0 10px">Mode: <b>${esc(mode)}</b></td><td colspan="3">Approx Distance: <b>${esc(I.dist?I.dist+"km":"-")}</b></td></tr>
+ <tr><td style="padding:0 10px">Type: <b>${k==="salereturn"?"Inward - Sales Return":"Outward - Supply"}</b></td><td>Document Details: <b>${docT} - ${esc(rec.inv||"")} - ${esc(dd)}</b></td><td colspan="2">Transaction type: <b>Regular</b></td></tr></table>
+ <div style="${hl};margin-top:6px"></div>${sec("IRN Details")}${rec.irn?`<div style="padding:0 10px 8px;font-size:9px;word-break:break-all">${esc(rec.irn)}</div>`:`<div style="height:18px"></div>`}
+ <div style="${hl}"></div>${sec("2. Address Details")}
+ <table style="width:100%;border-collapse:collapse"><tr>${box("From",c.gstin,c.name,frSt,":: Dispatch From ::",P.addr)}${box("To",gst,pt.name,toSt,":: Ship To ::",addrLine(pt.addr,stName(pt.stcode||g.pos),pt.pin))}</tr></table>
+ ${sec("3. Goods Details")}
+ <table style="width:calc(100% - 16px);margin:0 8px;border-collapse:collapse;font-size:10.5px;border-top:1px solid #444;border-bottom:1px solid #444"><tr style="font-weight:bold;text-align:left"><td style="padding:6px 8px;width:9%">HSN Code</td><td style="padding:6px 8px">Product Name &amp; Desc.</td><td style="padding:6px 8px">Quantity</td><td style="padding:6px 8px">Taxable Amount Rs.</td><td style="padding:6px 8px">Tax Rate (C+S+I+Cess+Cess Non.Advol)</td></tr>${goods}</table>
+ <div style="padding:10px 10px 4px;font-size:10px;line-height:2">Tot. Tax'ble Amt <b>₹ ${f2(g.tv)}</b> &nbsp; CGST Amt <b>₹ ${f2(g.cg)}</b> &nbsp; SGST Amt <b>₹ ${f2(g.sg)}</b> &nbsp; IGST Amt <b>₹ ${f2(g.ig)}</b> &nbsp; CESS Amt <b>₹ 0.00</b> &nbsp; CESS Non.Advol Amt <b>₹ 0.00</b><br>Other Amt <b>₹ 0.00</b> &nbsp; Total Inv.Amt <b>₹ ${f2(gt)}</b></div>
+ <div style="${hl}"></div>${sec("4. Transportation Details")}
+ <table style="width:100%;border-collapse:collapse;font-size:11px"><tr><td style="padding:2px 10px 10px;width:50%">Transporter ID &amp; Name : ${esc([I.trId,I.trName].filter(Boolean).join(" "))}</td><td style="padding:2px 10px 10px">Transporter Doc. No &amp; Date : ${esc([I.docNo,I.docDt].filter(Boolean).join(" "))}</td></tr></table>
+ <div style="${hl}"></div>${sec("5. Vehicle Details")}
+ <table style="width:calc(100% - 16px);margin:0 8px;border-collapse:collapse;font-size:8.5px;border:1px solid #444"><tr style="font-weight:bold;text-align:left"><td style="padding:5px 8px">Mode</td><td style="padding:5px 8px">Vehicle/Trans Doc No &amp; Dt.</td><td style="padding:5px 8px">From</td><td style="padding:5px 8px">Entered Date</td><td style="padding:5px 8px">Entered By</td><td style="padding:5px 8px">CEWB No. (If any)</td><td style="padding:5px 8px">Multi Veh.Info (If any)</td></tr><tr><td style="padding:5px 8px">${esc(mode)}</td><td style="padding:5px 8px">${esc(I.veh||I.docNo||"-")}</td><td style="padding:5px 8px">${esc(c.city||"")}</td><td style="padding:5px 8px">${esc(dg.d)} ${esc(dg.t2||"")}</td><td style="padding:5px 8px">${esc(gen)}</td><td style="padding:5px 8px">-</td><td style="padding:5px 8px">-</td></tr></table>
+ <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:22px 18px 6px"><div style="width:190px">${ewb?`${code128(ewb,48)}<div style="font-size:8px;text-align:center;margin-top:2px">${esc(ewb)}</div>`:""}</div>
+ <div style="text-align:center;min-width:210px"><div style="font-weight:bold;font-size:10px">FOR ${esc(c.name||"")}</div><div style="height:62px;display:flex;align-items:center;justify-content:center">${P.sign?`<img src="${P.sign}" style="max-height:60px;max-width:190px">`:""}</div><div style="font-weight:bold;font-size:10px;border-top:1px solid #000;padding-top:3px">${esc(P.label||"AUTHORISED SIGNATORY")}</div></div></div></div>`;
 }
 function prPortalHtml(rec,k){
  const P=prCompany(),c=P.c,g=gstCalc(rec),pt=g.pt||{},gst=String(rec.gstin!==undefined?rec.gstin:(pt.gstin||""));
