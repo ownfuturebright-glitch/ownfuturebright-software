@@ -3425,7 +3425,7 @@ function prRun(mode){
  else prPortalEwb(rec,k);
 }
 
-/* Fetch the official Webtel sandbox E-Way Bill Part-B print */
+/* Fetch the official Webtel E-Way Bill Part-B print (Live or Sandbox) */
 async function prPortalEwb(rec,k){
  const cached=(rec.edocHistory||[]).find(z=>z.category==="portalPrint"&&z.kind==="ewb"&&z.ok&&z.response&&!/INVALID GSTIN|"IsSuccess"\s*:\s*"false"/i.test(z.response));if(cached){edocOpenSaved(cached.response,"Saved official E-Way Bill print");return}
  let ewbNo=String(edocEwbNo(rec)||"").trim();
@@ -3435,7 +3435,7 @@ async function prPortalEwb(rec,k){
   if(v===null)return;ewbNo=String(v).replace(/\D/g,"");
   if(!/^\d{12}$/.test(ewbNo)){alert("Please enter a valid 12-digit E-Way Bill number.");return}
  }
- if(String(rec.ewbNumber||"").trim()!==ewbNo){rec.ewbNumber=ewbNo;const o2=rec.id?DB.sale.find(z=>z.id===rec.id):null;if(o2){o2.ewbNumber=ewbNo;save()}}
+ if(String(rec.ewbNumber||"").trim()!==ewbNo){rec.ewbNumber=ewbNo;const bucket=DB[k]||[];const o2=rec.id?bucket.find(z=>z.id===rec.id):null;if(o2){o2.ewbNumber=ewbNo;rec=o2}save()}
  const c=comp()||{},api=apiCfg(),isLive=rec.ewbEnvironment==="live";
  // Sandbox GSTIN from the saved sandbox credentials must take priority over the
  // Company's live GSTIN. Otherwise Webtel validates the live GSTIN against test EWB.
@@ -3456,7 +3456,8 @@ async function prPortalEwb(rec,k){
  if(!w){alert("Official E-Way Bill print ke liye pop-ups allow karein.");return}
  w.document.write('<!doctype html><title>E-Way Bill</title><body style="font:14px Arial;padding:28px">Webtel portal se official E-Way Bill print fetch ho raha hai...</body>');
  try{
-  let url=isLive?urlOf("ewbl",ACTS.ewbl.find(z=>z[0]==="prtb")):"http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
+  // Official detailed E-Way Bill print endpoint. Live and Sandbox must never be mixed.
+  let url=isLive?"http://service.webtel.in/printeway/v1.3/PrintEWBDetail2":"http://service.webtel.in/printewaysandbox/v1.3/PrintEWBDetail2";
   const up=url.replace(/^http:/i,"https:"),cands=up===url?[url]:(location.protocol==="https:"?[up,url]:[url,up]);
   let response,rawT="",lastErr;
   for(const u of cands){
@@ -3484,7 +3485,8 @@ async function prPortalEwb(rec,k){
    b64=String(b64).replace(/^data:application\/pdf;base64,/i,"").replace(/\s/g,"");
    const bin=atob(b64),bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
    const blob=new Blob([bytes],{type:"application/pdf"}),blobUrl=URL.createObjectURL(blob);
-   w.location.href=blobUrl;setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);return;
+   const fileName="EWay-Bill-"+ewbNo+".pdf";
+   w.document.open();w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>E-Way Bill '+esc(ewbNo)+'</title><style>html,body{height:100%;margin:0;font:14px Arial}header{height:54px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#111a33;color:white}a{background:#315bff;color:white;text-decoration:none;padding:9px 15px;border-radius:7px;font-weight:bold}iframe{width:100%;height:calc(100% - 54px);border:0}</style></head><body><header><b>E-Way Bill '+esc(ewbNo)+'</b><a id="dl" href="'+blobUrl+'" download="'+esc(fileName)+'">Download PDF</a></header><iframe title="E-Way Bill PDF" src="'+blobUrl+'"></iframe></body></html>');w.document.close();return;
   }
   w.document.open();w.document.write('<!doctype html><title>E-Way Bill API Response</title><body style="font:13px monospace;white-space:pre-wrap;padding:20px"></body>');
   w.document.body.textContent=typeof data==="string"?data:JSON.stringify(data,null,2);w.document.close();
