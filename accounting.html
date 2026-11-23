@@ -1112,12 +1112,12 @@ function edocApply(kind,live,act,body,J,x,raw){
  const out=[];if(!x||!J||typeof J!=="object")return out;
  const g=k=>{const v=fany(J,k);return v===""?"":String(v)};if(/^false$/i.test(g("IsSuccess")))return out;
  const first=(...ks)=>{for(const k of ks){const v=g(k);if(v)return v}return ""};
- const bd=Array.isArray(body)?(body[0]||{}):(body||{}),bf=(...ks)=>{for(const k of ks){const v=fany(bd,k);if(v!=="")return String(v)}return ""};
+ const bd=Array.isArray(body)?(body[0]||{}):(body||{}),deepVal=(obj,ks)=>{const wanted=new Set(ks.map(k=>String(k).toLowerCase()));let got="";const walk=v=>{if(got||!v||typeof v!=="object")return;if(Array.isArray(v)){for(const z of v)walk(z);return}for(const [k,z] of Object.entries(v)){if(wanted.has(k.toLowerCase())&&z!==null&&z!==undefined&&String(z).trim()!==""&&String(z)!=="0"){got=String(z);return}}for(const z of Object.values(v))walk(z)};walk(obj);return got},bf=(...ks)=>deepVal(bd,ks)||deepVal(J,ks);
  const env=live?"live":"sand",now=new Date().toISOString();let gs="";try{gs=bf("Gstin","GSTIN","gstin","userGstin")||comp().gstin||""}catch(e){}
  const ewbFrom=()=>{const en=first("ewayBillNo","EwbNo","ewbNo","EwayBillNo","EWBNumber","EwbNumber","EWBNo")||findEwbNo(J)||ewbNoFromText(raw);if(!en)return false;
   x.ewbNumber=en;x.ewbDate=first("ewayBillDate","EwbDt","EwbDate","ewbDate","EWBDate","EWBDt")||x.ewbDate;x.ewbValidTill=first("validUpto","EwbValidTill","ValidUpto","ewbValidTill","EWBValidTill","ValidTill")||x.ewbValidTill;
   x.ewbGstin=gs||first("SuppGSTIN")||x.ewbGstin;x.ewbEnvironment=env;x.ewbGeneratedAt=now;
-  const vn=bf("VehNo","vehicleNo","VehicleNo"),tn=bf("TransName","transporterName","TransporterName"),ds=bf("TransDistance","Distance","distance","approxDistance");
+  const vn=bf("VehNo","vehicleNo","VehicleNo","vehicle_number","VehicleNumber","vehicleNumber","vehicleRegNo","VehicleRegNo","regNo","RegNo"),tn=bf("TransName","transporterName","TransporterName"),ds=bf("TransDistance","Distance","distance","approxDistance","ApproxDistance");
   if(vn)x.vehicleNo=vn;if(tn)x.transporterName=tn;if(ds)x.distance=ds;out.push("E-Way Bill "+en);return true};
  if(kind==="einv"&&(act==="gen"||act==="gen2")){
   const irn=first("Irn","irn");if(!irn)return out;
@@ -1127,7 +1127,7 @@ function edocApply(kind,live,act,body,J,x,raw){
   x.signedInvoice=first("SignedInvoice","signedInvoice")||x.signedInvoice;
   out.push("IRN "+irn.slice(0,12)+"...");ewbFrom();save();return out}
  if(kind==="ewb"&&(act==="gen"||act==="genirn")){if(ewbFrom())save();return out}
- if(kind==="ewb"&&act==="veh"){const vn=bf("VehNo","vehicleNo","VehicleNo"),vt=first("validUpto","EwbValidTill","ValidUpto");
+ if(kind==="ewb"&&act==="veh"){const vn=bf("VehNo","vehicleNo","VehicleNo","vehicle_number","VehicleNumber","vehicleNumber","vehicleRegNo","VehicleRegNo","regNo","RegNo"),vt=first("validUpto","EwbValidTill","ValidUpto");
   if(!vn&&!vt)return out;if(vn){x.vehicleNo=vn;out.push("Vehicle "+vn)}if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt)}save();return out}
  if(kind==="ewb"&&act==="ext"){const vt=first("validUpto","EwbValidTill","ValidUpto","updatedDate");if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt);save()}return out}
  return out}
@@ -3351,11 +3351,13 @@ function ewbInfo(rec){
  const hs=(rec.edocHistory||[]).filter(h=>h&&h.category!=="portalPrint");
  const pj=t=>{try{return JSON.parse(t)}catch(e){return null}};
  const resp=hs.map(h=>pj(h.response)).filter(Boolean),req=hs.map(h=>pj(h.request)).filter(Boolean),all=resp.concat(req);
- const get=(keys,src)=>{for(const ob of src){for(const k of keys){const v=fany(ob,k);if(v!==""&&v!==null&&v!==undefined&&String(v)!=="0")return String(v)}}return ""};
+ // Webtel responses may wrap Part-B data inside nested result/data/list objects.
+ const deep=(obj,keys)=>{const wanted=new Set(keys.map(k=>String(k).toLowerCase()));let found="";const walk=v=>{if(found||!v||typeof v!=="object")return;if(Array.isArray(v)){for(const z of v)walk(z);return}for(const [k,x] of Object.entries(v)){if(wanted.has(k.toLowerCase())&&x!==null&&x!==undefined&&String(x).trim()!==""&&String(x)!=="0"){found=String(x);return}}for(const x of Object.values(v))walk(x)};walk(obj);return found};
+ const get=(keys,src)=>{for(const ob of src){const v=deep(ob,keys);if(v)return v}return ""};
  const fill=(f,keys,src)=>{if(!o[f])o[f]=get(keys,src||all)};
  fill("ewbDate",["ewayBillDate","EwbDt","EwbDate","ewbDate","EWBDate","EwbGeneratedDate","GeneratedDate"],resp);
  fill("valid",["validUpto","ValidUpto","EwbValidTill","ewbValidTill","EWBValidTill","ValidTill","validTill"],resp);
- fill("veh",["vehicleNo","VehNo","vehNo","VehicleNo","vehicle_number","VehicleNumber"]);
+ fill("veh",["vehicleNo","VehNo","vehNo","VehicleNo","vehicle_number","VehicleNumber","vehicleNumber","vehicleRegNo","VehicleRegNo","regNo","RegNo"]);
  fill("dist",["transDistance","TransDistance","Distance","distance","approxDistance","ApproxDistance","remainingDistance"]);
  fill("trId",["transporterId","TransId","transId","TransporterId"]);
  fill("trName",["transporterName","TransName","transName","TransporterName"]);
