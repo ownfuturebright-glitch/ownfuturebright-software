@@ -1030,7 +1030,7 @@ async function edocBill(kind,live,id){
  RS.es=id;RS.api.act=kind==="einv"?"gen2":"gen";
  const check=edocBuild(kind),iss=check?check.iss.filter(i=>!/^Note:/.test(i)):[];
  if(iss.length){render();alert("Please complete the selected bill details first:\n\n"+iss.join("\n"));return}
- render();RS.api.body=apiBodyFor(kind,live);await apiSend(kind,live);
+ render();RS.api.body=apiBodyFor(kind,live);await apiSend(kind,live,1);
 }
 const einvoiceBill=id=>edocBill("einv",0,id);
 function edocPage0(kind,live){
@@ -1103,6 +1103,12 @@ function apiBodyFor(kind,live){
  const C0=apiCfg(),cr0=credEff(kind,live),T0=apiTpl(kind,RS.api.act);
  return JSON.stringify(ewbPush(C0.mode==="headers"||Array.isArray(T0)||!cr0?T0:{...T0,...cr0}),null,2);
 }
+function apiOpEinv(live,L,a){
+ const env=live?"Live":"Sandbox",ops=[["gen2","Generate IRN","\uD83D\uDCC4"],["prt","Print E-Invoice ("+env+")","\uD83D\uDDA8"],["can","Cancel IRN","\u2298"]].filter(o=>L.some(z=>z[0]===o[0])),rest=L.filter(z=>!ops.some(o=>o[0]===z[0]));
+ return `<div style="font-weight:700;font-size:13px;margin:12px 0 8px;color:#24324b">Operation</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px">${ops.map(o=>{const on=o[0]===a.act;return `<button type="button" onclick="RS.api.act='${o[0]}';render()" style="min-height:58px;display:flex;align-items:center;justify-content:flex-start;gap:9px;text-align:left;padding:10px 12px;border:1px solid ${on?"#315cff":"#d9e0ec"};border-radius:10px;background:${on?"#f3f6ff":"#fff"};color:${on?"#1745d1":"#42516b"};font-weight:700;cursor:pointer">${o[2]} <span>${o[1]}</span></button>`}).join("")}</div>${rest.length?`<div style="margin-top:8px"><label>More actions</label><select onchange="if(this.value){RS.api.act=this.value;render()}"><option value="">- select -</option>${rest.map(z=>`<option value="${z[0]}" ${z[0]===a.act?"selected":""}>${z[1]}</option>`).join("")}</select></div>`:""}`}
+function apiFootEinv(live,a,act){
+ const lb=({gen:"Generate E-Invoice",gen2:"Generate E-Invoice",can:"Cancel IRN",prt:"Print E-Invoice"})[a.act]||act[1];
+ return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;background:#f5f7fc;border-radius:10px"><b style="color:#475069">${RS.es?1:0} documents selected</b><button onclick="apiSend('einv',${live?1:0})" style="background:#2f54d6;color:#fff;border:0;border-radius:9px;padding:10px 20px;font-weight:700;cursor:pointer">\u27A4 ${lb}</button></div>`}
 function apiPanel(kind,live){
  const a=RS.api,e=live?"l":"s",L=ACTS[kind+e];
  if(a.pk!==kind+e){a.pk=kind+e;a.act=kind==="einv"?"gen2":"gen"}
@@ -1112,13 +1118,13 @@ function apiPanel(kind,live){
  const act=L.find(z=>z[0]===a.act);
  return `<div style="margin:0 14px 18px;padding:14px;border:1px solid #c9d3f5;border-radius:10px;background:#fafbff">
  <b>⚡ Webtel API (${live?"Live":"Sandbox"})</b>
- ${kind==="ewb"&&live?`<div style="font-weight:700;font-size:13px;margin:12px 0 8px;color:#24324b">Operation</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px">${L.map(z=>`<button type="button" onclick="RS.api.act='${z[0]}';render()" style="min-height:58px;display:flex;align-items:center;justify-content:flex-start;gap:9px;text-align:left;padding:10px 12px;border:1px solid ${z[0]===a.act?'#315cff':'#d9e0ec'};border-radius:10px;background:${z[0]===a.act?'#f3f6ff':'#fff'};color:${z[0]===a.act?'#1745d1':'#42516b'};font-weight:700;cursor:pointer">${({gen:'🚚',genirn:'♧',veh:'↻',prta:'▤',prtb:'▤',can:'⊘',rej:'⊘',con:'▣',get:'⇩',tr:'↻',ext:'↻'})[z[0]]||'•'} <span>${({gen:'Generate E-Way Bill',genirn:'Generate by IRN',veh:'Update Vehicle',prta:'Summary Print (Live)',prtb:'Detail Print (Live)',can:'Cancel E-Way Bill',rej:'Reject E-Way Bill',con:'Consolidated E-Way Bill',get:'Get E-Way Bill Detail',tr:'Update Transporter',ext:'Extend Validity'})[z[0]]||z[1]}</span></button>`).join('')}</div>`:`<label>Action</label><select onchange="RS.api.act=this.value;render()">${L.map(z=>`<option value="${z[0]}" ${z[0]===a.act?"selected":""}>${z[1]}</option>`).join("")}</select>`}
+ ${kind==="einv"?apiOpEinv(live,L,a):kind==="ewb"&&live?`<div style="font-weight:700;font-size:13px;margin:12px 0 8px;color:#24324b">Operation</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px">${L.map(z=>`<button type="button" onclick="RS.api.act='${z[0]}';render()" style="min-height:58px;display:flex;align-items:center;justify-content:flex-start;gap:9px;text-align:left;padding:10px 12px;border:1px solid ${z[0]===a.act?'#315cff':'#d9e0ec'};border-radius:10px;background:${z[0]===a.act?'#f3f6ff':'#fff'};color:${z[0]===a.act?'#1745d1':'#42516b'};font-weight:700;cursor:pointer">${({gen:'🚚',genirn:'♧',veh:'↻',prta:'▤',prtb:'▤',can:'⊘',rej:'⊘',con:'▣',get:'⇩',tr:'↻',ext:'↻'})[z[0]]||'•'} <span>${({gen:'Generate E-Way Bill',genirn:'Generate by IRN',veh:'Update Vehicle',prta:'Summary Print (Live)',prtb:'Detail Print (Live)',can:'Cancel E-Way Bill',rej:'Reject E-Way Bill',con:'Consolidated E-Way Bill',get:'Get E-Way Bill Detail',tr:'Update Transporter',ext:'Extend Validity'})[z[0]]||z[1]}</span></button>`).join('')}</div>`:`<label>Action</label><select onchange="RS.api.act=this.value;render()">${L.map(z=>`<option value="${z[0]}" ${z[0]===a.act?"selected":""}>${z[1]}</option>`).join("")}</select>`}
  <div style="font-size:12px;color:#6b7690;margin-top:10px">POST → ${esc(urlOf(kind+e,act))}</div>
  <div style="font-size:12px;color:#6b7690;margin-top:8px">Credentials: ${credInfo(kind,e)} (change it in Other → Webtel API Settings)${live?"":`<br>Sandbox seller GSTIN: <b>${esc(sbxFor(comp())||"State Code missing")}</b>${apiCfg().sbuyer?" • Test buyer GSTIN: <b>"+esc(apiCfg().sbuyer)+"</b>":""}`}</div>
  <label>IRN (filled in automatically after generating)</label><input value="${esc(RS.irn)}" onchange="RS.irn=this.value;render()">
  ${kind==="ewb"?`<label>E-Way Bill No. (saved on this bill; used in Print / Get / Cancel etc.)</label><input value="${esc(edocEwbNo(DB.sale.find(z=>z.id===RS.es)))}" onchange="ewbNoSet(this.value)">`:""}
  <label>Request body (JSON, editable)</label><textarea rows="10" style="font-family:monospace;font-size:12px" oninput="RS.api.body=this.value">${esc(a.body)}</textarea>
- <div class="btns" style="justify-content:flex-start"><button onclick="apiSend('${kind}',${live?1:0})">Send to ${live?"Live":"Sandbox"} API</button></div>
+ ${kind==="einv"?apiFootEinv(live,a,act):`<div class="btns" style="justify-content:flex-start"><button onclick="apiSend('${kind}',${live?1:0})">Send to ${live?"Live":"Sandbox"} API</button></div>`}
  ${a.resp?`<pre style="margin:10px 0 0;padding:12px;background:#0f1a3a;color:#d7ffe0;border-radius:8px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap">${esc(a.resp)}</pre>`:""}
  <div style="font-size:12px;color:#b26a00;margin-top:10px">${live?"⚠ This is the LIVE API. Sending creates or changes a real document. ":"Sandbox is for testing only. "}Match the exact request format and login details with the Webtel documentation. Most URLs are http, not https, so credentials travel without encryption. Credentials stay saved in your browser. The browser may block the request because of CORS.</div></div>`;
 }
@@ -1166,8 +1172,11 @@ function edocApply(kind,live,act,body,J,x,raw){
   if(!vn&&!vt)return out;if(vn){x.vehicleNo=vn;out.push("Vehicle "+vn)}if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt)}save();return out}
  if(kind==="ewb"&&act==="ext"){const vt=first("validUpto","EwbValidTill","ValidUpto","updatedDate");if(vt){x.ewbValidTill=vt;out.push("Valid till "+vt);save()}return out}
  return out}
-async function apiSend(kind,live){
+async function apiSend(kind,live,skipAsk){
  const a=RS.api,e=live?"l":"s",act=ACTS[kind+e].find(z=>z[0]===a.act);let body,h;
+ if(kind==="einv"&&!skipAsk&&(a.act==="gen"||a.act==="gen2")){const ans=await edocAsk(live);if(!ans)return;const was=!!RS.ew.einvEwb;RS.ew.einvEwb=ans==="yes";
+  if(RS.ew.einvEwb){const ck=edocBuild("einv"),iss=ck?ck.iss.filter(i=>!/^Note:/.test(i)):[];if(iss.length){render();alert("Please complete the selected bill details first:\n\n"+iss.join("\n"));return}}
+  if(was!==RS.ew.einvEwb)a.body=apiBodyFor(kind,live)}
  if(kind==="ewb"&&(a.act==="gen"||a.act==="genirn")&&ewbLocked(DB.sale.find(z=>z.id===RS.es),live)){alert("E-Way Bill is already generated for this bill and saved ("+edocEwbNo(DB.sale.find(z=>z.id===RS.es))+"). It cannot be generated again.");return}
  try{body=JSON.parse(a.body)}catch(x){alert("The request body is not valid JSON");return}
  const C=apiCfg(),cr=credEff(kind,live);if(cr===null){alert("The credentials in Webtel API Settings are not valid JSON");return}
