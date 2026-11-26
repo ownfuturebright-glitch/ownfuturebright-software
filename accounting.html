@@ -838,8 +838,12 @@ function gstr1Build(pv){
    const key=(reg?"B":"C")+"|"+h+"|"+rr+"|"+u,a=HSN[key]=HSN[key]||{t:reg?"B2B":"B2C",hsn_sc:h,desc:(nameRule(it.name||l.name)||{}).desc||String(it.name||l.name||"").slice(0,30),uqc:u,qty:0,rt:rr,txval:0,val:0,iamt:0,camt:0,samt:0,csamt:0};
    {const pd=+x.postDisc||0,bs=g.tv+g.tax,f=bs?1-pd/bs:1,v=(l.t+l.tx)*f;a.txval+=sg*l.t;if(u!=="NA")a.qty+=sg*(+l.qty||0);a.val+=sg*v;TH.tv+=sg*l.t;TH.tot+=sg*v;if(g.intra){a.camt+=sg*l.tx/2;a.samt+=sg*l.tx/2;TH.cg+=sg*l.tx/2;TH.sg+=sg*l.tx/2}else{a.iamt+=sg*l.tx;TH.ig+=sg*l.tx}}});
  });
- const rng=set=>{const G={};[...set].forEach(n=>{const mm=String(n).match(/^(.*?)(\d+)$/),p=mm?mm[1]:"\u0000"+n;(G[p]=G[p]||[]).push({n,v:mm?+mm[2]:0,num:!!mm})});
-  return Object.values(G).map(a=>{a.sort((x,y)=>x.v-y.v||(x.n<y.n?-1:1));const f=a[0],l=a[a.length-1],tot=f.num?l.v-f.v+1:a.length;return {from:f.n,to:l.n,totnum:tot,cancel:Math.max(0,tot-a.length),net_issue:a.length}})};
+ const rng=set=>{const SK={};[...set].forEach(n=>{const s=String(n),tk=s.match(/\d+/g)||[],sk=s.replace(/\d+/g,"#");(SK[sk]=SK[sk]||[]).push({n:s,tk:tk.map(Number),raw:tk})});
+  const out=[];Object.values(SK).forEach(g=>{const nt=g[0].tk.length;if(!nt){g.forEach(x=>out.push({from:x.n,to:x.n,totnum:1,cancel:0,net_issue:1}));return}
+   let k=0,best=-1;for(let i=0;i<nt;i++){const d=new Set(g.map(x=>x.tk[i])).size;if(d>best){best=d;k=i}}
+   const S={};g.forEach(x=>{const key=x.raw.filter((_,i)=>i!==k).join("|");(S[key]=S[key]||[]).push(x)});
+   Object.values(S).forEach(a=>{a.sort((x,y)=>x.tk[k]-y.tk[k]);const f=a[0],l=a[a.length-1],tot=l.tk[k]-f.tk[k]+1;out.push({from:f.n,to:l.n,totnum:tot,cancel:Math.max(0,tot-a.length),net_issue:a.length})})});
+  return out};
  const di=[];[[1,"Invoices for outward supply",DI.inv],[5,"Credit Note",DI.cr]].forEach(([n,t,set])=>{const d=rng(set);if(d.length)di.push({doc_num:n,doc_typ:t,docs:d.map((z,i)=>({num:i+1,...z}))})});
  const cancelled=di.reduce((a,t)=>a+t.docs.reduce((b,z)=>b+z.cancel,0),0);
  const longNo=[...DI.inv,...DI.cr].filter(n=>String(n).length>16).length;
