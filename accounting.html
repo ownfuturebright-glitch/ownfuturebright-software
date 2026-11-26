@@ -995,7 +995,7 @@ function edocBuild(kind){
   if(RS.ew.einvEwb){
    const E=RS.ew;
    j.EwbDtls={TransId:E.tid||"",TransName:E.tname||"",TransMode:String(E.transMode||"1"),Distance:+E.dist||0,TransDocNo:E.transDocNo||"",TransDocDt:E.transDocDt?fd(E.transDocDt):"",VehNo:VH,VehType:E.vehType||"R"};
-   if(!E.dist||+E.dist<=0)need(true,"E-Way Bill Distance (km) must be greater than zero");
+   if(!E.dist||+E.dist<=0)iss.push("Note: E-Way Bill Distance is 0 - the portal will auto-calculate it");
    if(!VH&&!E.tid&&!E.transDocNo)need(true,"Enter Vehicle No., Transporter ID or Transport Document No. for E-Way Bill");
   }
  }
@@ -1018,8 +1018,15 @@ function edocBuild(kind){
 }
 function edocDl(kind){const r=edocBuild(kind);if(r)dl((kind==="einv"?"einvoice_":"ewaybill_")+r.no+".json",JSON.stringify(r.j,null,2),"application/json")}
 function edocCp(kind){const r=edocBuild(kind);if(r)cpTxt(JSON.stringify(r.j,null,2))}
+function edocAsk(live){return new Promise(res=>{
+ const o=document.createElement("div");o.style.cssText="position:fixed;inset:0;background:rgba(15,26,58,.45);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px";
+ o.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:26px 28px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-size:16px;line-height:1.5;color:#1a2238"><div>Generate E-Way Bill also?</div><div>${live?"Live":"Sandbox"}: Do you want to generate an E-Way Bill together with the selected E-Invoice(s)?</div><div>Yes uses each party's vehicle number and vehicle type R. No generates only the E-Invoice.</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><button data-a="yes" style="background:#2f54d6;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer">Yes, generate both</button><button data-a="no" style="background:#2f54d6;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer">No, E-Invoice only</button><button data-a="" style="background:#fff;color:#1a2238;border:1.5px solid #1a2238;border-radius:9px;padding:10px 18px;font-weight:600;cursor:pointer">Cancel</button></div></div>`;
+ const done=v=>{o.remove();document.removeEventListener("keydown",kd);res(v)},kd=e=>{if(e.key==="Escape")done("")};
+ o.onclick=e=>{const b=e.target.closest("button");if(b)done(b.dataset.a);else if(e.target===o)done("")};
+ document.addEventListener("keydown",kd);document.body.appendChild(o)})}
 async function edocBill(kind,live,id){
  if(kind==="ewb"&&ewbLocked(DB.sale.find(z=>z.id===id),live)){alert("E-Way Bill is already generated for this bill and saved ("+edocEwbNo(DB.sale.find(z=>z.id===id))+"). Select the bill and use Print / Get Detail instead.");return}
+ if(kind==="einv"){const ans=await edocAsk(live);if(!ans)return;RS.ew.einvEwb=ans==="yes"}
  RS.es=id;RS.api.act=kind==="einv"?"gen2":"gen";
  const check=edocBuild(kind),iss=check?check.iss.filter(i=>!/^Note:/.test(i)):[];
  if(iss.length){render();alert("Please complete the selected bill details first:\n\n"+iss.join("\n"));return}
