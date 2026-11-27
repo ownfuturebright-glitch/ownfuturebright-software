@@ -541,14 +541,35 @@ function outst(recv){
 }
 function waOutstanding(id,recv){
  const p=DB.party.find(x=>x.id===id);if(!p)return;
- let ph=String(p.phone||"").replace(/\\D/g,"");
+ let ph=String(p.phone||"").replace(/\D/g,"");
  if(ph.length===10)ph="91"+ph;
- if(!ph){alert("Party Master में इस Party का Phone Number नहीं है।");return}
+ if(!ph){alert("This party has no phone number in Party Master.");return}
+ const old=document.getElementById("waChoice");if(old)old.remove();
+ const d=document.createElement("div");d.id="waChoice";
+ d.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center";
+ d.innerHTML=`<div style="background:#fff;border-radius:10px;padding:20px 24px;min-width:280px;max-width:90vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.3)"><div style="font-size:16px;font-weight:600;margin-bottom:6px">Send on WhatsApp</div><div style="font-size:13px;color:#555;margin-bottom:16px">${esc(p.name)}<br>What do you want to send?</div><div style="display:flex;gap:10px;justify-content:center"><button type="button" id="waRem" style="background:#25a244;padding:8px 16px">Reminder</button><button type="button" id="waLed" style="background:#3d5afe;padding:8px 16px">Ledger</button><button type="button" id="waCan" style="background:#8a94a8;padding:8px 16px">Cancel</button></div></div>`;
+ document.body.appendChild(d);
+ const close=()=>d.remove();
+ d.onclick=e=>{if(e.target===d)close()};
+ document.getElementById("waCan").onclick=close;
+ document.getElementById("waRem").onclick=()=>{close();waSend(ph,waReminderMsg(p,recv))};
+ document.getElementById("waLed").onclick=()=>{close();waSend(ph,waLedgerMsg(p))};
+}
+function waSend(ph,msg){window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(msg),"_blank","noopener")}
+function waReminderMsg(p,recv){
  const side=partySide(p),amount=n2(Math.abs(side?side.amt:0)),company=comp().name||"",fy=fyl(+(RS.periodFY??RS.fy));
- const msg=recv
+ return recv
   ?`Dear ${p.name},\n\nThis is a payment reminder from ${company}. Your outstanding ledger balance for FY ${fy} is ₹${amount}.\n\nPlease arrange payment and share the payment details. If already paid, please share the reference so we can reconcile our records.\n\nThank you,\n${company}`
   :`Dear ${p.name},\n\nThis is a payment update from ${company}. The outstanding payable balance in your account for FY ${fy} is ₹${amount}.\n\nWe will arrange the payment. If you have received the payment already, please share the reference so we can reconcile our records.\n\nThank you,\n${company}`;
- window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(msg),"_blank","noopener");
+}
+function waLedgerMsg(p){
+ const company=comp().name||"",rg=reportPeriodRange(),fy=fyl(+(RS.periodFY??RS.fy));
+ let b=+p.opening||0;const e=entries(p.id);
+ e.filter(x=>x.date<rg.from).forEach(x=>b+=x.dr-x.cr);
+ const ob=b;let td=0,tc=0;const L=[];
+ e.filter(x=>x.date>=rg.from&&x.date<=rg.to).forEach(x=>{b+=x.dr-x.cr;td+=x.dr;tc+=x.cr;
+  L.push(`${fd(x.date)} | ${x.type}${x.no?" "+x.no:""} | ${x.dr?"Dr "+n2(x.dr):"Cr "+n2(x.cr)} | Bal ${dc(b)}`)});
+ return `*${company}*\nLedger Statement - ${p.name}\nFY ${fy} (${fd(rg.from)} to ${fd(rg.to)})\n\nOpening Balance: ₹${dc(ob)}\n`+(L.length?"\n"+L.join("\n")+"\n":"\n(No entries in this period)\n")+`\nTotal Debit: ₹${n2(td)}\nTotal Credit: ₹${n2(tc)}\n*Closing Balance: ₹${dc(b)}*\n\nPlease check and confirm. For any difference, let us know.\n\nThank you,\n${company}`;
 }
 const stockVal=()=>DB.item.reduce((a,i)=>a+stockQty(i)*(+i.prate||0),0);
 const cashBank=()=>{let c=0,b=0;DB.receipt.forEach(x=>isBank(x)?b+=+x.amount||0:c+=+x.amount||0);DB.payment.forEach(x=>isBank(x)?b-=+x.amount||0:c-=+x.amount||0);return[c,b]};
